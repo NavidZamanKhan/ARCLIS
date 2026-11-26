@@ -5,7 +5,7 @@
 
 FILE *cli_open_source(int argc, char **argv, const char *tool);
 int cli_finish(FILE *source, int status, const char *tool);
-void cli_write_string(const char *text, size_t length);
-void cli_write_range(LexerRange range);
+void cli_write_string(FILE *output, const char *text, size_t length);
+void cli_write_range(FILE *output, LexerRange range);
 
 #endif

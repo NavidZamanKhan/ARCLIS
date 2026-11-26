@@ -29,15 +29,15 @@ $(PARSER_SOURCE) $(PARSER_HEADER) $(PARSER_REPORT) &: parser.y
 	$(BISON) -Wall -Werror=conflicts-sr -Werror=conflicts-rr --report=states,solved \
 		--report-file="$(PARSER_REPORT)" --defines="$(PARSER_HEADER)" -o "$(PARSER_SOURCE)" "$<"
 
-$(PARSER_TARGET): parse_main.c syntax.h lexer.h cli_io.h $(CLI_SOURCES) $(SCANNER) $(PARSER_SOURCE) $(PARSER_HEADER)
-	$(CC) $(CPPFLAGS) $(CFLAGS) -I. $(LDFLAGS) -o "$@" parse_main.c $(CLI_SOURCES) "$(SCANNER)" "$(PARSER_SOURCE)" $(LDLIBS)
+$(PARSER_TARGET): parse_main.c syntax.h ast.h ast.c ast_json.c lexer.h cli_io.h $(CLI_SOURCES) $(SCANNER) $(PARSER_SOURCE) $(PARSER_HEADER)
+	$(CC) $(CPPFLAGS) $(CFLAGS) -I. $(LDFLAGS) -o "$@" parse_main.c ast.c ast_json.c $(CLI_SOURCES) "$(SCANNER)" "$(PARSER_SOURCE)" $(LDLIBS)
 
 $(API_TEST): ../tests/test_lexer_api.c lexer.h $(SCANNER)
 	$(CC) $(CPPFLAGS) $(CFLAGS) -I. $(LDFLAGS) -o "$@" "$<" "$(SCANNER)" $(LDLIBS)
 
-$(PARSER_TRACE_TEST): ../tests/test_parser_trace.c syntax.h lexer.h lexer_diagnostics.c $(SCANNER) $(PARSER_SOURCE) $(PARSER_HEADER)
+$(PARSER_TRACE_TEST): ../tests/test_parser_trace.c syntax.h ast.h ast.c lexer.h lexer_diagnostics.c $(SCANNER) $(PARSER_SOURCE) $(PARSER_HEADER)
 	$(CC) $(CPPFLAGS) $(CFLAGS) -DARCLIS_SYNTAX_DEBUG=1 -I. -I"$(BUILD_DIR)" $(LDFLAGS) \
-		-o "$@" "$<" lexer_diagnostics.c "$(SCANNER)" "$(PARSER_SOURCE)" $(LDLIBS)
+		-o "$@" "$<" ast.c lexer_diagnostics.c "$(SCANNER)" "$(PARSER_SOURCE)" $(LDLIBS)
 
 test: $(TARGET) $(API_TEST) $(PARSER_TARGET) $(PARSER_TRACE_TEST) $(PARSER_REPORT)
 	$(PYTHON) ../tests/test_lexer.py "$(TARGET)"

@@ -130,6 +130,44 @@ Make writes the Bison state report to compiler_engine/c/build/parser.output.
 The build treats unresolved shift/reduce and reduce/reduce conflicts as errors.
 The test target uses Python 3 and runs scanner and parser fixtures.
 
+### Print the abstract syntax tree
+
+~~~bash
+compiler_engine/c/build/arclis-parse --ast path/to/source.c
+printf 'int main(void) { return 1 + 2 * 3; }\n' | compiler_engine/c/build/arclis-parse --ast
+~~~
+
+Successful runs add one JSON Lines record with `kind: "ast"` and a
+`root` Program node. The final syntax-result record uses the same format
+as the syntax-only command. Failed parses emit diagnostics and the final
+result. AST mode limits input to 1 MiB, trees to 4,096 nodes, and nesting
+to 128 nodes along any branch. The node and input limits bound JSON size.
+
+Every node has `kind` and an end-exclusive `range` in lexer coordinates.
+The Program spans the full input, including leading and trailing layout.
+Lists preserve source order. Optional children and unnamed parameters
+use JSON null. Literal text preserves source spelling and escape sequences.
+
+| Node kind | Additional JSON fields |
+| --- | --- |
+| Program, Block | `items` |
+| IncludeDirective | `text` |
+| FunctionDeclaration | `name`, `returnType`, `static`, `parameters`, `body` |
+| Parameter | `type`, `name` |
+| VariableDeclaration | `type`, `static`, `declarators` |
+| Declarator | `name`, `initializer` |
+| Assignment, BinaryExpression | `operator`, `left`, `right` |
+| UnaryExpression | `operator`, `operand`, `postfix` |
+| Identifier | `name` |
+| Literal | `literalKind`, `text` |
+| StringLiteral | `segments`, an ordered list of string Literal nodes |
+| CallExpression | `callee`, `arguments` |
+| IfStatement | `condition`, `thenBranch`, `elseBranch` |
+| WhileStatement | `condition`, `body` |
+| ForStatement | `initializer`, `condition`, `step`, `body` |
+| ReturnStatement, ParenthesizedExpression, ExpressionStatement | `expression` |
+| EmptyStatement | Contains the common node fields |
+
 ## Run the Django backend locally
 
 From the repository root in Ubuntu under WSL 2, with Python 3.12 and its venv module installed:

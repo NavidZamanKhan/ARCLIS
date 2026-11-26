@@ -65,6 +65,8 @@ typedef struct Lexer Lexer;
 
 /* The caller retains ownership of source. */
 int lexer_init(Lexer **lexer, FILE *source);
+/* The scanner copies the source bytes during initialization. */
+int lexer_init_bytes(Lexer **lexer, const char *source, size_t length);
 /* Lexeme bytes are borrowed until the next call to lexer_next or lexer_destroy. */
 LexerToken lexer_next(Lexer *lexer);
 void lexer_destroy(Lexer *lexer);

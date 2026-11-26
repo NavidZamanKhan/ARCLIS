@@ -54,40 +54,40 @@ static size_t utf8_width(const unsigned char *bytes, size_t length)
     return width;
 }
 
-void cli_write_string(const char *text, size_t length)
+void cli_write_string(FILE *output, const char *text, size_t length)
 {
     const unsigned char *bytes = (const unsigned char *)text;
-    putchar('"');
+    fputc('"', output);
     for (size_t index = 0; index < length; ++index) {
         const unsigned char byte = bytes[index];
         if (byte == '"' || byte == '\\') {
-            putchar('\\');
-            putchar(byte);
+            fputc('\\', output);
+            fputc(byte, output);
         } else if (byte >= 0x20 && byte <= 0x7e) {
-            putchar(byte);
+            fputc(byte, output);
         } else {
             const size_t width = utf8_width(bytes + index, length - index);
             if (width != 0) {
-                fwrite(bytes + index, 1, width, stdout);
+                fwrite(bytes + index, 1, width, output);
                 index += width - 1;
             } else {
-                printf("\\u%04x", (unsigned int)byte);
+                fprintf(output, "\\u%04x", (unsigned int)byte);
             }
         }
     }
-    putchar('"');
+    fputc('"', output);
 }
 
-static void write_position(LexerPosition position)
+static void write_position(FILE *output, LexerPosition position)
 {
-    printf("{\"line\":%zu,\"column\":%zu,\"offset\":%zu}", position.line, position.column, position.offset);
+    fprintf(output, "{\"line\":%zu,\"column\":%zu,\"offset\":%zu}", position.line, position.column, position.offset);
 }
 
-void cli_write_range(LexerRange range)
+void cli_write_range(FILE *output, LexerRange range)
 {
-    fputs("{\"start\":", stdout);
-    write_position(range.start);
-    fputs(",\"end\":", stdout);
-    write_position(range.end);
-    putchar('}');
+    fputs("{\"start\":", output);
+    write_position(output, range.start);
+    fputs(",\"end\":", output);
+    write_position(output, range.end);
+    fputc('}', output);
 }

@@ -1,7 +1,7 @@
 #ifndef ARCLIS_SYNTAX_H
 #define ARCLIS_SYNTAX_H
 
-#include "lexer.h"
+#include "ast.h"
 
 typedef enum {
     SYNTAX_VALID = 0,
@@ -26,5 +26,7 @@ typedef void (*SyntaxDiagnosticSink)(const SyntaxDiagnostic *diagnostic, void *u
 
 /* The caller retains ownership of source. A null sink still detects errors. */
 SyntaxStatus syntax_analyze(FILE *source, SyntaxDiagnosticSink sink, void *user);
+/* On success the caller owns *tree. On failure *tree is null. */
+SyntaxStatus syntax_analyze_ast(FILE *source, AstTree **tree, SyntaxDiagnosticSink sink, void *user);
 
 #endif

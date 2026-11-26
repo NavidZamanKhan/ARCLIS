@@ -19,13 +19,13 @@ static const char *const kind_names[] = {
 static void write_record(LexerToken token)
 {
     printf("{\"kind\":\"%s\",\"lexeme\":", kind_names[token.kind]);
-    cli_write_string(token.lexeme, token.length);
+    cli_write_string(stdout, token.lexeme, token.length);
     fputs(",\"range\":", stdout);
-    cli_write_range(token.range);
+    cli_write_range(stdout, token.range);
     if (token.kind == LEX_ERROR) {
         const LexerDiagnosticInfo *info = lexer_diagnostic_info(token.diagnostic);
         printf(",\"severity\":\"error\",\"code\":\"%s\",\"message\":", info->code);
-        cli_write_string(info->message, strlen(info->message));
+        cli_write_string(stdout, info->message, strlen(info->message));
     }
     puts("}");
 }

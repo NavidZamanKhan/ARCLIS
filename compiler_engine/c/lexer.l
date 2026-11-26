@@ -6,6 +6,7 @@
 #include "lexer.h"
 
 #include <stdbool.h>
+#include <limits.h>
 #include <stdlib.h>
 
 typedef struct {
@@ -189,18 +190,41 @@ struct Lexer {
     LexerState state;
 };
 
-int lexer_init(Lexer **result, FILE *source)
+static Lexer *new_lexer(void)
 {
     Lexer *lexer = calloc(1, sizeof(*lexer));
     if (lexer == NULL) {
-        return -1;
+        return NULL;
     }
     lexer->state.next = (LexerPosition){.line = 1, .column = 1};
     if (yylex_init_extra(&lexer->state, &lexer->scanner) != 0) {
         free(lexer);
+        return NULL;
+    }
+    return lexer;
+}
+
+int lexer_init(Lexer **result, FILE *source)
+{
+    Lexer *lexer = new_lexer();
+    if (lexer == NULL) {
         return -1;
     }
     yyset_in(source, lexer->scanner);
+    *result = lexer;
+    return 0;
+}
+
+int lexer_init_bytes(Lexer **result, const char *source, size_t length)
+{
+    if (length > INT_MAX - 2) {
+        return -1;
+    }
+    Lexer *lexer = new_lexer();
+    if (lexer == NULL) {
+        return -1;
+    }
+    yy_scan_bytes(source, (int)length, lexer->scanner);
     *result = lexer;
     return 0;
 }
