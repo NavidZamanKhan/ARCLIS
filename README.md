@@ -73,6 +73,32 @@ Run `npm test` for frontend tests and `npm run build` to produce
 `frontend/dist/`, including Monaco's worker. The theme tokens, including the
 syntax palette, live in `frontend/src/styles/tokens.css`.
 
+## Run the educational C lexer in WSL
+
+From the repository root, build the scanner with GNU Flex, Make, and a C17
+compiler. Pass the path to a C source file or pipe source through stdin.
+
+```bash
+make -C compiler_engine/c
+printf 'int main(void) { return 0; }\n' | compiler_engine/c/build/arclis-lex
+compiler_engine/c/build/arclis-lex path/to/source.c
+```
+
+The command emits one JSON record per token or error, followed by an EOF
+record. Each record has a kind, lexeme and end-exclusive range. Lines and
+UTF-8 byte columns start at 1. Byte offsets start at 0. CRLF and bare CR each
+count as one newline, tabs count as one byte, and a leading UTF-8 BOM affects
+the byte offsets alone. Invalid UTF-8 bytes in diagnostic lexemes are escaped
+in the JSON.
+
+The scanner recognizes the basic C types and control-flow keywords, `static`,
+ASCII identifiers, C-style numeric and quoted literals, operators, delimiters,
+comments, and simple quoted or angle-bracket includes. Includes are emitted as
+tokens, and the lexer reports unsupported directives, malformed literals, and
+unexpected characters. The command exits with 0 for successful tokenization,
+1 for lexical diagnostics, or 2 for a command or I/O error. This scanner is
+part of the educational compiler and runs independently of native execution.
+
 ## Run the Django backend locally
 
 From the repository root in Ubuntu under WSL 2, with Python 3.12 and its venv module installed:

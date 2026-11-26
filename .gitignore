@@ -17,3 +17,6 @@ __pycache__/
 /frontend/node_modules/
 /frontend/dist/
 /frontend/coverage/
+
+# Generated educational compiler artifacts
+/compiler_engine/c/build/
