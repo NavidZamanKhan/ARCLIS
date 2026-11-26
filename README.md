@@ -2,6 +2,26 @@
 
 Advanced Runtime and Compiler Lab for Interactive Study
 
+## Run the frontend locally
+
+Open an Ubuntu WSL login shell with Node.js 24.15 or later in the Node 24
+line. From the repository root:
+
+```bash
+cd frontend
+npm ci
+npm run dev
+```
+
+Open `http://127.0.0.1:5173` for the Cupertino Graphite component preview.
+Select Graphite or Silver using the keyboard or pointer. The browser saves
+the selected theme locally. The preview includes language-specific source
+samples and shared controls and works independently of the backend.
+
+Run `npm test` for frontend tests and `npm run build` to produce
+`frontend/dist/`. The source preview uses static samples. The theme tokens,
+including the syntax palette, live in `frontend/src/styles/tokens.css`.
+
 ## Run the Django backend locally
 
 From the repository root in Ubuntu under WSL 2, with Python 3.12 and its venv module installed:

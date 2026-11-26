@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 
 import { Brand } from './components/Brand.jsx';
 import { ThemeSelector } from './components/ThemeSelector.jsx';
+import { ComponentPreview } from './preview/ComponentPreview.jsx';
 import { readTheme, saveTheme } from './theme/preferences.js';
 
 export default function App() {
@@ -22,7 +23,8 @@ export default function App() {
       </header>
       <main className="preview">
         <h1>Cupertino Graphite</h1>
-        <p className="preview-description">The design system for the ARCLIS workspace.</p>
+        <p className="preview-description">Preview source, controls, and status in both workspace themes.</p>
+        <ComponentPreview />
       </main>
     </div>
   );
