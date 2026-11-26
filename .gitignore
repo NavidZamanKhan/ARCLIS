@@ -17,6 +17,8 @@ __pycache__/
 /frontend/node_modules/
 /frontend/dist/
 /frontend/coverage/
+/frontend/test-results/
+/frontend/playwright-report/
 
 # Generated educational compiler artifacts
 /compiler_engine/c/build/
