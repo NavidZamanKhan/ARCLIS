@@ -247,6 +247,44 @@ the subset leaves evaluation order unspecified, and emits branches to
 preserve `&&` and `||` short-circuiting. The output is an educational
 representation of the analyzed source for inspection.
 
+## Analyze C in the workspace
+
+Build the analyzer image on the rootless Docker worker in Ubuntu under WSL 2.
+Run these commands from the repository root with the backend environment loaded.
+
+```bash
+docker build --file docker/analyzer.Dockerfile \
+    --tag arclis-toolchain-c-analyzer:s18 compiler_engine/c
+ARCLIS_ENABLE_LOCAL_ANALYSIS=1 python -m uvicorn --app-dir backend \
+    config.asgi:application --host 127.0.0.1 --port 8000 --no-proxy-headers
+```
+
+Open a C source or header in the workspace and select **Analyze**. The right
+inspector shows tokens, the AST, symbols, diagnostics, and intermediate code.
+Expand AST nodes to see their children and select a result to jump to its
+source range. Diagnostics also appear in Monaco. Editing, renaming, or
+deleting the analyzed file marks its snapshot stale and clears its markers.
+**Run** continues to use the selected execution target and native toolchain.
+
+For a complete report, try `int main(void) { return 1 + 2 * 3; }` in a C
+buffer. The starter sample calls `printf` through a system header. The
+educational analyzer reads a single buffer and reports undeclared names
+from headers as semantic diagnostics.
+
+`POST /api/v1/analysis/` accepts one JSON `source` string. Successful requests
+return HTTP 200 with `syntax_valid`, `semantic_valid`, `tokens`, `ast`,
+`scopes`, `symbols`, `diagnostics`, and `ir`. This includes source with
+diagnostics. An unavailable AST or IR is null. The local DEBUG opt-in and
+origin checks apply independently from execution. The endpoint analyzes up to
+64 KiB of UTF-8 source, with one in-flight worker per backend process, a
+5-second analyzer deadline, and a 2 MiB combined worker output limit. The
+compiler still applies its AST node and nesting limits. A size or resource
+limit receives a structured error.
+
+The dedicated container uses the scanner and `arclis-parse --analysis`, which
+collects AST, semantics, and IR in one parse. It reads a fixed, read-only input
+file and starts no submitted program.
+
 ## Run the Django backend locally
 
 From the repository root in Ubuntu under WSL 2, with Python 3.12 and its venv module installed:
