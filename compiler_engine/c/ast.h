@@ -113,6 +113,8 @@ AstList ast_append(AstList list, AstNode *node);
 AstBuildError ast_error(const AstTree *tree);
 void ast_set_root(AstTree *tree, AstNode *root);
 const AstNode *ast_root(const AstTree *tree);
+size_t ast_node_count(const AstTree *tree);
+const char *ast_type_name(AstType type);
 void ast_destroy(AstTree *tree);
 void ast_write_json(FILE *output, const AstTree *tree);
 

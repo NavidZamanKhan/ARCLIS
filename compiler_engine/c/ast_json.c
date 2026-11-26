@@ -27,14 +27,6 @@ static const char *const node_names[] = {
     [AST_EMPTY_STATEMENT] = "EmptyStatement",
 };
 
-static const char *const type_names[] = {
-    [AST_TYPE_INT] = "int",
-    [AST_TYPE_FLOAT] = "float",
-    [AST_TYPE_DOUBLE] = "double",
-    [AST_TYPE_CHAR] = "char",
-    [AST_TYPE_VOID] = "void",
-};
-
 static const char *const literal_names[] = {
     [AST_INTEGER] = "integer",
     [AST_FLOATING] = "floating",
@@ -107,20 +99,20 @@ static void write_node(FILE *output, const AstNode *node)
         break;
     case AST_FUNCTION:
         write_text(output, "name", node->as.function.name);
-        write_word(output, "returnType", type_names[node->as.function.specifiers.type]);
+        write_word(output, "returnType", ast_type_name(node->as.function.specifiers.type));
         write_bool(output, "static", node->as.function.specifiers.is_static);
         write_list(output, "parameters", node->as.function.parameters);
         write_child(output, "body", node->as.function.body);
         break;
     case AST_PARAMETER:
-        write_word(output, "type", type_names[node->as.parameter.type]);
+        write_word(output, "type", ast_type_name(node->as.parameter.type));
         write_text(output, "name", node->as.parameter.name);
         break;
     case AST_BLOCK:
         write_list(output, "items", node->as.list);
         break;
     case AST_DECLARATION:
-        write_word(output, "type", type_names[node->as.declaration.specifiers.type]);
+        write_word(output, "type", ast_type_name(node->as.declaration.specifiers.type));
         write_bool(output, "static", node->as.declaration.specifiers.is_static);
         write_list(output, "declarators", node->as.declaration.declarators);
         break;

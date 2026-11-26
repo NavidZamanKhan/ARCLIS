@@ -124,7 +124,7 @@ same source range format as the scanner. A final syntax-result record includes
 validity and the diagnostic count. It exits with 0 for valid syntax, 1 for
 invalid syntax, or 2 for a driver or parser resource error. Pointer declarators,
 arrays, member access, and other unsupported syntax produce diagnostics.
-Type and scope checks belong to the later semantic analysis stage.
+Use `--semantic` to add type and scope checks.
 
 Make writes the Bison state report to compiler_engine/c/build/parser.output.
 The build treats unresolved shift/reduce and reduce/reduce conflicts as errors.
@@ -167,6 +167,42 @@ use JSON null. Literal text preserves source spelling and escape sequences.
 | ForStatement | `initializer`, `condition`, `step`, `body` |
 | ReturnStatement, ParenthesizedExpression, ExpressionStatement | `expression` |
 | EmptyStatement | Contains the common node fields |
+
+### Check types and scopes
+
+```bash
+compiler_engine/c/build/arclis-parse --semantic path/to/source.c
+printf 'int twice(int n) { return n * 2; }\n' | compiler_engine/c/build/arclis-parse --semantic
+```
+
+This mode uses the AST input, node, and depth limits. After the syntax-result
+record, it emits source-located diagnostics with `phase: "semantic"`, one
+`symbols` record, and a final `semantic-result` with `valid` and `diagnostics`.
+The symbol table is available even when the semantic pass finds errors. A
+failed parse skips the pass and sets the semantic result's `valid` field to
+null. Exit codes are 0 for success, 1 for source errors, and 2 for input or
+resource errors.
+
+The `symbols` record contains ordered `scopes` and `symbols` arrays. Scope
+IDs are one-based. Each scope includes its kind, parent's ID (null at file
+scope), and source range. Each symbol includes its name, kind, type, scope ID,
+static flag, and first declaration range. `definitionRange` identifies the
+explicit definition when one exists. It is null for prototype-only functions,
+prototype parameters, and objects with only tentative declarations. Function
+symbols also include `parameterTypes`. Entries follow source order and
+compatible redeclarations keep the original entry.
+
+Declarations become visible in source order. A function definition shares its
+outer block scope with its parameters. Nested blocks and `for` loops can
+shadow outer names. Compatible file-scope declarations share a symbol. The
+pass checks numeric conversions, modifiable assignment targets, operators,
+conditions, the count and types of call arguments, and return statements.
+
+The educational subset treats both `()` and `(void)` as zero parameters.
+Include directives are preserved by the parser. Header contents, implicit
+library declarations, constant initializer rules, and return-path analysis
+are outside this pass. String literals support truth tests and comparisons
+with other string literals. Numeric types accept numeric values.
 
 ## Run the Django backend locally
 

@@ -13,6 +13,8 @@ API_TEST := $(BUILD_DIR)/test-lexer-api
 PARSER_TRACE_TEST := $(BUILD_DIR)/test-parser-trace
 AST_API_TEST := $(BUILD_DIR)/test-ast-api
 CLI_SOURCES := cli_io.c lexer_diagnostics.c
+SEMANTIC_SOURCES := semantic.c symbol_table.c
+SEMANTIC_HEADERS := semantic.h symbol_table.h
 
 .PHONY: all test clean
 
@@ -30,8 +32,8 @@ $(PARSER_SOURCE) $(PARSER_HEADER) $(PARSER_REPORT) &: parser.y
 	$(BISON) -Wall -Werror=conflicts-sr -Werror=conflicts-rr --report=states,solved \
 		--report-file="$(PARSER_REPORT)" --defines="$(PARSER_HEADER)" -o "$(PARSER_SOURCE)" "$<"
 
-$(PARSER_TARGET): parse_main.c syntax.h ast.h ast.c ast_json.c lexer.h cli_io.h $(CLI_SOURCES) $(SCANNER) $(PARSER_SOURCE) $(PARSER_HEADER)
-	$(CC) $(CPPFLAGS) $(CFLAGS) -I. $(LDFLAGS) -o "$@" parse_main.c ast.c ast_json.c $(CLI_SOURCES) "$(SCANNER)" "$(PARSER_SOURCE)" $(LDLIBS)
+$(PARSER_TARGET): parse_main.c syntax.h ast.h ast.c ast_json.c lexer.h cli_io.h $(CLI_SOURCES) $(SEMANTIC_SOURCES) $(SEMANTIC_HEADERS) $(SCANNER) $(PARSER_SOURCE) $(PARSER_HEADER)
+	$(CC) $(CPPFLAGS) $(CFLAGS) -I. $(LDFLAGS) -o "$@" parse_main.c ast.c ast_json.c $(CLI_SOURCES) $(SEMANTIC_SOURCES) "$(SCANNER)" "$(PARSER_SOURCE)" $(LDLIBS)
 
 $(API_TEST): ../tests/test_lexer_api.c lexer.h $(SCANNER)
 	$(CC) $(CPPFLAGS) $(CFLAGS) -I. $(LDFLAGS) -o "$@" "$<" "$(SCANNER)" $(LDLIBS)

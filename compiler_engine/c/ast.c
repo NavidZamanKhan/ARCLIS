@@ -127,6 +127,23 @@ const AstNode *ast_root(const AstTree *tree)
     return tree->root;
 }
 
+size_t ast_node_count(const AstTree *tree)
+{
+    return tree->count;
+}
+
+const char *ast_type_name(AstType type)
+{
+    static const char *const names[] = {
+        [AST_TYPE_INT] = "int",
+        [AST_TYPE_FLOAT] = "float",
+        [AST_TYPE_DOUBLE] = "double",
+        [AST_TYPE_CHAR] = "char",
+        [AST_TYPE_VOID] = "void",
+    };
+    return names[type];
+}
+
 void ast_destroy(AstTree *tree)
 {
     if (tree == NULL) {
