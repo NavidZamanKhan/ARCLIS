@@ -36,11 +36,13 @@ function Location({ range, navigate, className = '', children }) {
 
 function AstNode({ node, field, navigate, root }) {
   const [expanded, setExpanded] = useState(Boolean(root));
-  const children = Object.entries(node).flatMap(([key, value]) => (
-    (Array.isArray(value) ? value : [value]).filter((item) => item?.kind && item?.range)
+  const fields = node.fields ?? node;
+  const children = Object.entries(fields).flatMap(([key, value]) => (
+    (Array.isArray(value) ? value : [value]).filter((item) => typeof item?.kind === 'string')
       .map((item) => ({ node: item, field: key }))
   ));
-  const detail = node.name ?? node.operator ?? node.text ?? node.type;
+  const detail = fields.name ?? fields.operator ?? fields.text ?? fields.type ?? fields.id ?? fields.arg ?? fields.attr ?? fields.value;
+  const label = ['string', 'number', 'boolean'].includes(typeof detail) ? String(detail) : null;
   const Chevron = expanded ? ChevronDown : ChevronRight;
   return (
     <li className="analysis-branch">
@@ -52,7 +54,7 @@ function AstNode({ node, field, navigate, root }) {
           </button>
         )}
         <Location range={node.range} navigate={navigate}>
-          <span>{node.kind}{detail && <code> {detail}</code>}{field && <small>{field}</small>}</span>
+          <span>{node.kind}{label && <code> {label}</code>}{field && <small>{field}</small>}</span>
         </Location>
       </div>
       {expanded && children.length > 0 && (
@@ -94,13 +96,14 @@ function instructionText(row, symbols) {
   }
 }
 
-function ResultView({ view, report, navigate }) {
+function ResultView({ view, report, navigate, python }) {
   if (view === 'AST') {
     return report.ast
       ? <ul className="analysis-list"><AstNode node={report.ast} navigate={navigate} root /></ul>
       : <p className="analysis-note">Fix the syntax diagnostics to view the AST.</p>;
   }
   if (view === 'IR') {
+    if (python) return <p className="analysis-note">Intermediate code is unavailable for Python analysis.</p>;
     if (!report.ir) return <p className="analysis-note">Fix the diagnostics to generate intermediate code.</p>;
     if (!(report.ir.initializers.length || report.ir.instructions.length)) {
       return <p className="analysis-note">This source produces no instructions.</p>;
@@ -132,17 +135,21 @@ function ResultView({ view, report, navigate }) {
   if (view === 'Symbols') {
     if (!report.syntax_valid) return <p className="analysis-note">Fix the syntax diagnostics to view symbols.</p>;
     const scopes = new Map(report.scopes.map((scope) => [scope.id, scope]));
+    const scopeLabel = (item) => scopes.get(item.scope)?.kind + ' #' + item.scope;
     return report.symbols.length ? (
-      <PagedList items={report.symbols} renderItem={(item, index) => (
-        <li key={index}>
-          <Location range={item.range} navigate={navigate}>
-            <span>
-              <code>{item.name}{Array.isArray(item.parameterTypes) && '(' + item.parameterTypes.join(', ') + ')'}</code>
-              <small>{item.static ? 'static ' : ''}{item.type} · {item.kind} · {scopes.get(item.scope)?.kind} #{item.scope}</small>
-            </span>
-          </Location>
-        </li>
-      )} />
+      <>
+        {python && <p className="analysis-note">Select a symbol to jump to its scope.</p>}
+        <PagedList items={report.symbols} renderItem={(item, index) => (
+          <li key={index}>
+            <Location range={item.range} navigate={navigate}>
+              <span>
+                <code>{item.name}{Array.isArray(item.parameterTypes) && '(' + item.parameterTypes.join(', ') + ')'}</code>
+                <small>{python ? item.flags?.join(', ') : `${item.static ? 'static ' : ''}${item.type} · ${item.kind}`} · {scopeLabel(item)}</small>
+              </span>
+            </Location>
+          </li>
+        )} />
+      </>
     ) : <p className="analysis-note">No symbols.</p>;
   }
 
@@ -150,14 +157,17 @@ function ResultView({ view, report, navigate }) {
     <PagedList items={report.tokens} renderItem={(item, index) => (
       <li key={index}>
         <Location range={item.range} navigate={navigate}>
-          <span><code>{item.lexeme || 'EOF'}</code><small>{item.kind}</small></span>
+          <span>
+            {(item.lexeme || ['eof', 'endmarker'].includes(item.kind)) && <code>{item.lexeme || 'EOF'}</code>}
+            <small>{item.exact_kind ?? item.kind}</small>
+          </span>
         </Location>
       </li>
     )} />
   );
 }
 
-function AnalysisResults({ report, navigate }) {
+function AnalysisResults({ report, navigate, python }) {
   const [view, setView] = useState(report.diagnostics.length ? 'Diagnostics' : 'Tokens');
   return (
     <>
@@ -166,18 +176,20 @@ function AnalysisResults({ report, navigate }) {
           <button type="button" key={entry} aria-pressed={view === entry} onClick={() => setView(entry)}>{entry}</button>
         ))}
       </div>
-      <ResultView key={view} view={view} report={report} navigate={navigate} />
+      <ResultView key={view} view={view} report={report} navigate={navigate} python={python} />
     </>
   );
 }
 
 export function AnalysisInspector({ state, stale, navigate }) {
-  if (!state) return <p className="analysis-note">Open a C file and select Analyze.</p>;
+  if (!state) return <p className="analysis-note">Open a C or Python file and select Analyze.</p>;
   const { snapshot, status, report, message } = state;
+  const python = snapshot.language === 'python';
   return (
-    <section className="analysis-inspector" aria-label="C analysis">
+    <section className="analysis-inspector" aria-label={python ? 'Python analysis' : 'C analysis'}>
       <h3 className="analysis-file" title={snapshot.path}>{snapshot.path}</h3>
-      {status === 'running' && <p className="analysis-note" role="status">Analyzing C source…</p>}
+      {python && <p className="analysis-note">Native Python 3.12</p>}
+      {status === 'running' && <p className="analysis-note" role="status">Analyzing source…</p>}
       {status === 'error' && <p className="analysis-note analysis-error" role="alert">{message}</p>}
       {status === 'complete' && (
         <>
@@ -185,7 +197,7 @@ export function AnalysisInspector({ state, stale, navigate }) {
             {stale ? 'Results are stale. Analyze again to update them.'
               : report.diagnostics.length ? report.diagnostics.length + ' diagnostics' : 'Analysis complete'}
           </p>
-          <AnalysisResults report={report} navigate={stale ? null : navigate} />
+          <AnalysisResults report={report} navigate={stale ? null : navigate} python={python} />
         </>
       )}
     </section>

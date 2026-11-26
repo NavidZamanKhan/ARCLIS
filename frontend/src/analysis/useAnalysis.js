@@ -6,22 +6,22 @@ const encoder = new TextEncoder();
 
 const errors = {
   403: 'This frontend origin is not allowed by the analyzer.',
-  404: 'Local C analysis is disabled. Start the loopback backend with analysis enabled.',
+  404: 'Local analysis is disabled. Start the loopback backend with analysis enabled.',
   413: 'The analysis request exceeds the server limit.',
   429: 'The analyzer is busy. Try again shortly.',
   503: 'The analyzer is unavailable. Check the local Docker image and worker.',
 };
 
-async function requestAnalysis(source, signal) {
+async function requestAnalysis(source, language, signal) {
   if (encoder.encode(source).length > sourceLimit) {
-    throw new Error('C analysis accepts up to 64 KiB of UTF-8 source.');
+    throw new Error('Analysis accepts up to 64 KiB of UTF-8 source.');
   }
   let response;
   try {
     response = await fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ source }),
+      body: JSON.stringify({ source, language }),
       credentials: 'omit',
       signal,
     });
@@ -35,9 +35,11 @@ async function requestAnalysis(source, signal) {
     }
     throw new Error(errors[response.status] ?? 'The local server could not analyze the source.');
   }
+  const root = language === 'python' ? 'Module' : 'Program';
   if (typeof data?.syntax_valid !== 'boolean' || ![true, false, null].includes(data.semantic_valid)
     || !['tokens', 'diagnostics', 'symbols', 'scopes'].every((field) => Array.isArray(data[field]))
-    || (data.ast !== null && data.ast?.kind !== 'Program')
+    || (data.ast !== null && data.ast?.kind !== root)
+    || (language === 'python' && data.ir !== null)
     || (data.ir !== null && (!Array.isArray(data.ir?.initializers) || !Array.isArray(data.ir?.instructions)))) {
     throw new Error('The local server returned an invalid analysis report.');
   }
@@ -53,15 +55,15 @@ export function useAnalysis() {
     pending.current = null;
   }, []);
 
-  async function start(file, content) {
+  async function start(file, content, language) {
     if (pending.current) return;
-    const snapshot = { id: file.id, path: file.path, content };
+    const snapshot = { id: file.id, path: file.path, content, language };
     const controller = new AbortController();
     pending.current = controller;
     const timeout = setTimeout(() => controller.abort(), 30000);
     setState({ snapshot, status: 'running' });
     try {
-      const report = await requestAnalysis(content, controller.signal);
+      const report = await requestAnalysis(content, language, controller.signal);
       if (pending.current === controller) setState({ snapshot, status: 'complete', report });
     } catch (error) {
       if (pending.current === controller) {

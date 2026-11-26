@@ -54,7 +54,7 @@ it('submits the active live buffer and shows navigable tokens, AST, symbols and 
   await within(panel).findByText('Analysis complete');
   const [url, options] = fetch.mock.calls[0];
   expect(url).toBe('http://127.0.0.1:8000/api/v1/analysis/');
-  expect(JSON.parse(options.body)).toEqual({ source });
+  expect(JSON.parse(options.body)).toEqual({ source, language: 'c' });
   expect(options.credentials).toBe('omit');
 
   const editor = createSourceEditor.mock.results[0].value;
@@ -114,6 +114,42 @@ it('keeps an in-flight response tied to the submitted snapshot and shows service
   await act(async () => finish(json(report)));
   expect(within(panel).getByRole('status').textContent).toMatch(/stale/);
   await user.click(button);
-  expect((await within(panel).findByRole('alert')).textContent).toMatch(/Local C analysis is disabled/);
+  expect((await within(panel).findByRole('alert')).textContent).toMatch(/Local analysis is disabled/);
   expect(button.disabled).toBe(false);
+});
+
+it('labels native Python analysis, shows real node shapes and explains unavailable IR', async () => {
+  const user = userEvent.setup();
+  const python = {
+    ...report, ir: null,
+    ast: { kind: 'Module', range: range(1, 1, 0), fields: { body: [
+      { kind: 'BinOp', range: range(1, 1, 0), fields: { op: { kind: 'Add', fields: {} } } },
+    ] } },
+    tokens: [{ kind: 'op', exact_kind: 'plus', lexeme: '+', range: range(1, 1, 0) }],
+    scopes: [{ id: 1, name: 'outer', kind: 'function' }],
+    symbols: [{ name: 'value', scope: 1, flags: ['parameter', 'referenced'], range: range(1, 1, 0) }],
+  };
+  const fetch = vi.fn().mockResolvedValue(json(python));
+  vi.stubGlobal('fetch', fetch);
+  render(<App />);
+  await user.click(screen.getByRole('button', { name: 'main.py, Python' }));
+  const analyze = screen.getByRole('button', { name: 'Analyze', exact: true });
+  expect(analyze.disabled).toBe(false);
+  await user.click(analyze);
+  const panel = await screen.findByRole('region', { name: 'Python analysis' });
+  expect((await within(panel).findByText('Native Python 3.12')).textContent).toBe('Native Python 3.12');
+  expect((await within(panel).findByText('plus')).textContent).toBe('plus');
+  expect(JSON.parse(fetch.mock.calls[0][1].body)).toMatchObject({ language: 'python' });
+  await user.click(within(panel).getByRole('button', { name: 'AST', exact: true }));
+  await user.click(within(panel).getByRole('button', { name: 'Expand BinOp' }));
+  expect(within(panel).getByRole('button', { name: /Add.*op/ }).disabled).toBe(true);
+  await user.click(within(panel).getByRole('button', { name: 'Symbols', exact: true }));
+  expect(within(panel).getByText(/parameter, referenced.*function #1/)).toBeDefined();
+  await user.click(within(panel).getByRole('button', { name: 'IR', exact: true }));
+  expect(within(panel).getByText('Intermediate code is unavailable for Python analysis.')).toBeDefined();
+  for (const file of ['Main.java, Java', 'main.cpp, C++']) {
+    await user.click(screen.getByRole('button', { name: file }));
+    expect(analyze.disabled).toBe(true);
+    expect(analyze.title).toBe('Analysis is available for C and Python files');
+  }
 });

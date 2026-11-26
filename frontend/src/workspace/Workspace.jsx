@@ -50,7 +50,8 @@ export function Workspace({ hidden, layout, onResize, showPanel, theme, toolbar,
   const staleAnalysis = Boolean(snapshot && (analyzedFile?.path !== snapshot.path || readContent(analyzedFile) !== snapshot.content));
   const locateAnalysisRange = useMemo(() => snapshot && sourceRanges(snapshot.content), [snapshot]);
   const report = analysis.state?.report;
-  const canAnalyze = !loading && activeFile && fileMode(activeFile.path) === 'c' && analysis.state?.status !== 'running';
+  const analysisLanguage = activeFile && fileMode(activeFile.path);
+  const canAnalyze = !loading && ['c', 'python'].includes(analysisLanguage) && analysis.state?.status !== 'running';
   const rawIssues = useMemo(() => readBuildIssues(execution.run.log, buildSources), [execution.run.log, buildSources]);
   const issues = useMemo(
     () => currentIssues(rawIssues, buildSources, files, readContent),
@@ -97,7 +98,7 @@ export function Workspace({ hidden, layout, onResize, showPanel, theme, toolbar,
     if (!canAnalyze) return;
     showPanel('inspector');
     setInspectorMode('analysis');
-    void analysis.start(activeFile, readContent(activeFile));
+    void analysis.start(activeFile, readContent(activeFile), analysisLanguage);
   }
 
   function runTarget() {

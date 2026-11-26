@@ -97,8 +97,8 @@ export function WorkspaceToolbar({
             aria-keyshortcuts="Control+Shift+Enter Meta+Shift+Enter"
             disabled={!execution.active || execution.run.state === 'CANCELLING'} onClick={execution.stop} />
           {!showPreview && (
-            <Button icon={ScanLine} aria-label="Analyze" title={analysisStatus === 'running' ? 'Analyzing C source'
-              : canAnalyze ? 'Analyze the active C file' : 'Open a C file to analyze it'}
+            <Button icon={ScanLine} aria-label="Analyze" title={analysisStatus === 'running' ? 'Analyzing source'
+              : canAnalyze ? 'Analyze the active file' : 'Analysis is available for C and Python files'}
               disabled={!canAnalyze} onClick={analyzeActiveFile}>Analyze</Button>
           )}
           <span
