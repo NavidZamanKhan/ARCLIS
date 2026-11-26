@@ -128,7 +128,7 @@ Type and scope checks belong to the later semantic analysis stage.
 
 Make writes the Bison state report to compiler_engine/c/build/parser.output.
 The build treats unresolved shift/reduce and reduce/reduce conflicts as errors.
-The test target uses Python 3 and runs scanner and parser fixtures.
+The test target uses Python 3 and runs scanner, parser, and AST fixtures.
 
 ### Print the abstract syntax tree
 

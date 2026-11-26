@@ -11,6 +11,7 @@ PARSER_REPORT := $(BUILD_DIR)/parser.output
 PARSER_TARGET := $(BUILD_DIR)/arclis-parse
 API_TEST := $(BUILD_DIR)/test-lexer-api
 PARSER_TRACE_TEST := $(BUILD_DIR)/test-parser-trace
+AST_API_TEST := $(BUILD_DIR)/test-ast-api
 CLI_SOURCES := cli_io.c lexer_diagnostics.c
 
 .PHONY: all test clean
@@ -39,11 +40,17 @@ $(PARSER_TRACE_TEST): ../tests/test_parser_trace.c syntax.h ast.h ast.c lexer.h 
 	$(CC) $(CPPFLAGS) $(CFLAGS) -DARCLIS_SYNTAX_DEBUG=1 -I. -I"$(BUILD_DIR)" $(LDFLAGS) \
 		-o "$@" "$<" ast.c lexer_diagnostics.c "$(SCANNER)" "$(PARSER_SOURCE)" $(LDLIBS)
 
-test: $(TARGET) $(API_TEST) $(PARSER_TARGET) $(PARSER_TRACE_TEST) $(PARSER_REPORT)
+$(AST_API_TEST): ../tests/test_ast_api.c syntax.h ast.h ast.c lexer.h lexer_diagnostics.c $(SCANNER) $(PARSER_SOURCE) $(PARSER_HEADER)
+	$(CC) $(CPPFLAGS) $(CFLAGS) -I. $(LDFLAGS) \
+		-o "$@" "$<" ast.c lexer_diagnostics.c "$(SCANNER)" "$(PARSER_SOURCE)" $(LDLIBS)
+
+test: $(TARGET) $(API_TEST) $(PARSER_TARGET) $(PARSER_TRACE_TEST) $(PARSER_REPORT) $(AST_API_TEST)
 	$(PYTHON) ../tests/test_lexer.py "$(TARGET)"
 	"$(API_TEST)"
 	$(PYTHON) ../tests/test_parser.py "$(PARSER_TARGET)" "$(PARSER_TRACE_TEST)" "$(PARSER_REPORT)"
+	$(PYTHON) ../tests/test_ast.py "$(PARSER_TARGET)"
+	"$(AST_API_TEST)"
 
 clean:
 	$(RM) -- "$(SCANNER)" "$(TARGET)" "$(API_TEST)" \
-		"$(PARSER_SOURCE)" "$(PARSER_HEADER)" "$(PARSER_REPORT)" "$(PARSER_TARGET)" "$(PARSER_TRACE_TEST)"
+		"$(PARSER_SOURCE)" "$(PARSER_HEADER)" "$(PARSER_REPORT)" "$(PARSER_TARGET)" "$(PARSER_TRACE_TEST)" "$(AST_API_TEST)"
