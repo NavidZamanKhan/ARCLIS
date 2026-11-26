@@ -364,6 +364,24 @@ errors use the `validation_error` code and return field or non-field errors
 under `details`. Malformed JSON uses `parse_error`, and internal errors return
 a generic message. The Django health endpoint retains its existing contract.
 
+## Workspace shortcuts, templates, and test cases
+
+- Press Ctrl+P or Cmd+P for **Quick Open**. Filter by filename or path, move
+  with the arrow keys, and press Enter to open the selected file.
+- Press Shift+F10 on a navigator row to open its file menu. Source files can
+  be selected as the execution target. Files and folders support **Copy Path**.
+- Choose a **Two-number sum** template in **New File** to create a C, C++, Java,
+  or Python exercise. The dialog defaults to a dedicated folder and selects the
+  new source as the execution target.
+- In **Debug → Test cases**, select a case and choose **Run case**. The app sends
+  the predefined input and EOF, then compares displayed stdout with the expected
+  output, including line breaks. See program output in **Console** and compiler
+  messages in **Build log**.
+- In the **File** inspector, adjust font size, word wrap, minimap, line numbers,
+  and indentation. **Reset editor preferences** restores the defaults.
+- **Reset Workspace** can restore the sample project or start empty. Confirming
+  clears the current execution and analysis and preserves editor preferences.
+
 ## Run the browser integration suite
 
 Run this suite in Ubuntu under WSL 2 with the backend Python virtual
@@ -394,6 +412,10 @@ workflows twice with `npm run test:e2e -- --repeat-each=2`. The same checkout
 passed all 85 Docker-enabled Django tests, 37 frontend tests, 55 compiler
 fixtures, and two C API tests. Both preview servers shut down, and the rootless
 Docker job containers and temporary workspaces were cleared.
+
+S20 added six browser workflows for the runnable templates and test cases,
+keyboard navigation, path copying, workspace reset, and editor preferences.
+All 17 browser workflows passed together.
 
 ## ASGI and WebSocket routing
 
