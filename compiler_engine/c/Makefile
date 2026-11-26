@@ -53,6 +53,7 @@ test: $(TARGET) $(API_TEST) $(PARSER_TARGET) $(PARSER_TRACE_TEST) $(PARSER_REPOR
 	$(PYTHON) ../tests/test_ast.py "$(PARSER_TARGET)"
 	"$(AST_API_TEST)"
 	$(PYTHON) ../tests/test_semantic.py "$(PARSER_TARGET)"
+	$(PYTHON) ../tests/test_ir.py "$(PARSER_TARGET)"
 
 clean:
 	$(RM) -- "$(SCANNER)" "$(TARGET)" "$(API_TEST)" \
