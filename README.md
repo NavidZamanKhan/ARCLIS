@@ -16,7 +16,8 @@ source ./.env
 set +a
 python backend/manage.py check
 (cd backend && python manage.py test)
-python -m uvicorn --app-dir backend config.asgi:application --host 127.0.0.1 --port 8000 --ws websockets-sansio
+python -m uvicorn --app-dir backend config.asgi:application --host 127.0.0.1 --port 8000 \
+  --workers 1 --no-proxy-headers --ws websockets-sansio --ws-max-size 24576 --ws-max-queue 16
 ```
 
 The local environment file is ignored by Git. Load it only after checking its
@@ -44,8 +45,9 @@ checks that Django can handle a request and works without a database connection.
 ## API capabilities and errors
 
 `GET /api/v1/capabilities/` lists the language identifiers used by the project
-and reports whether execution, interactive input, and analysis are available.
-The availability flags are currently all false.
+and reports whether execution, interactive input, and analysis are available
+to the requesting client. Execution and interactive input are available
+only on the enabled loopback development server. Analysis remains unavailable.
 
 DRF endpoints use JSON. Raised request errors preserve their HTTP status and
 return `{"error": {"code": "...", "details": {...}}}`. For endpoints that accept
@@ -57,17 +59,15 @@ a generic message. The Django health endpoint retains its existing contract.
 ## ASGI and WebSocket routing
 
 Uvicorn serves the Django HTTP application and routes WebSocket handshakes
-through the configured origin allowlist. Every unregistered WebSocket path is
-rejected during the handshake. The WebSocket test fixture is defined only in
-the test suite. Interactive execution routes will be added in their own stage.
+through the configured origin allowlist. Unregistered WebSocket paths are
+rejected during the handshake.
 
 ## Local execution worker
 
 The synchronous internal worker supports trusted toolchain adapters and
 fixtures. Use it from Ubuntu under WSL 2 or Linux with a local rootless Docker
 Engine, builtin seccomp, and systemd cgroup v2 CPU, memory, swap, and PID
-controllers. The worker connects to the current Linux user's rootless Unix
-socket. Web execution remains unavailable until the execution integration stages.
+controllers. The worker connects to the current Linux user's rootless Unix socket.
 
 Build the three images from the repository root:
 
@@ -76,7 +76,7 @@ Build the three images from the repository root:
   set -e
   for target in c-cpp java python; do
     docker build --file docker/toolchains.Dockerfile --target "$target" \
-      --tag "arclis-toolchain-$target:s05" docker
+      --tag "arclis-toolchain-$target:s06" docker
   done
 )
 ```
@@ -153,3 +153,42 @@ and exit code.
 Imports can use the entry file's directory, the workspace root, and the
 standard library. The interpreter starts with a clean environment, site
 packages disabled, and bytecode writes disabled.
+
+### Interactive sessions on loopback
+
+After building all `:s06` images and loading the local development settings,
+set `ARCLIS_ENABLE_LOCAL_EXECUTION=1` and start Uvicorn with the loopback,
+single-worker, and proxy-header options above. Keep this service local. The
+execution flag is off by default and requires Django debug mode.
+
+Send a JSON `POST /api/v1/executions/` using the following shape. Java also
+requires `main_class` and a matching entry path. An optional `stdin` field
+queues text before the first WebSocket message.
+
+```json
+{
+  "language": "python",
+  "entry_file": "main.py",
+  "files": [{"path": "main.py", "content": "print(input('Name? '))"}],
+  "interactive": true
+}
+```
+
+The HTTP 201 response contains `id`, `owner_token`, `websocket_path`, and
+`expires_in`. Open the returned path using the WebSocket subprotocols
+`["arclis.v1", "owner.<owner_token>"]` from a configured frontend origin.
+The server selects `arclis.v1`. Keep the owner token out of URLs and logs.
+The token can claim the session once, within 30 seconds. The job starts
+after the socket accepts, so the client can receive the first prompt.
+
+| Direction | Messages |
+| --- | --- |
+| Client | `{"type":"stdin","data":"Ada\n"}`, `{"type":"eof"}`, `{"type":"cancel"}` |
+| Server | `status` with `state`, `diagnostics`/`stdout`/`stderr` with UTF-8 `data`, `error` with `code` and `message`, and one terminal `result` with `state`, `exit_code`, and `execution_time_ms` |
+
+Flush prompts in the program before reading input. Stdin is a pipe, and the
+streams are decoded as UTF-8 with replacement for invalid bytes. The worker
+bounds compile time, total interactive time (120 seconds), runtime inactivity
+(30 seconds), output, and input (4 KiB per message, 64 KiB per job). The
+server admits up to eight unclaimed sessions and two active jobs. Disconnect
+and cancellation stop the job and trigger container and workspace cleanup.

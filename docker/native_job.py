@@ -17,11 +17,15 @@ def report(phase, diagnostics):
 
 
 def main():
-    cap = int(sys.argv[1])
-    runtime_start = 3 + int(sys.argv[2])
-    command = sys.argv[runtime_start:]
+    args = sys.argv[1:]
+    interactive = args[0] == "--interactive"
+    if interactive:
+        args = args[1:]
+    cap = int(args[0])
+    runtime_start = 2 + int(args[1])
+    command = args[runtime_start:]
     with subprocess.Popen(
-        sys.argv[3:runtime_start],
+        args[2:runtime_start],
         stdin=subprocess.DEVNULL,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
@@ -39,8 +43,9 @@ def main():
             report(1, diagnostics)
             return 1
 
-    with open(STDIN_FILE, "rb") as source:
-        os.dup2(source.fileno(), 0)
+    if not interactive:
+        with open(STDIN_FILE, "rb") as source:
+            os.dup2(source.fileno(), 0)
     report(0, diagnostics)
     os.execvp(command[0], command)
 

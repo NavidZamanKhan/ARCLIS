@@ -8,6 +8,7 @@ from enum import StrEnum
 from pathlib import Path
 from time import monotonic
 
+from .interaction import EOF, MAX_EVENT_CHUNK, MAX_RUNTIME_SECONDS, POLL_SECONDS
 from .states import ExecutionState
 
 CONTAINER_LABEL = "org.arclis.worker=local"
@@ -28,7 +29,7 @@ class Toolchain(StrEnum):
 
     @property
     def image(self):
-        return f"arclis-toolchain-{self.value}:s05"
+        return f"arclis-toolchain-{self.value}:s06"
 
 
 @dataclass(frozen=True)
@@ -118,11 +119,12 @@ class DockerSandbox:
             raise SandboxError("Docker isolation capabilities could not be verified.") from error
         validate_engine_info(info)
 
-    def create(self, name, workspace, toolchain, argv, limits):
+    def create(self, name, workspace, toolchain, argv, limits, *, interactive=False):
         memory = f"{limits.memory_mib}m"
         scratch = f"rw,exec,nosuid,nodev,size={limits.scratch_mib}m,mode=1777"
         result = self._call(
             "create",
+            *(("--interactive",) if interactive else ()),
             "--name", name,
             "--label", CONTAINER_LABEL,
             "--pull", "never",
@@ -149,20 +151,25 @@ class DockerSandbox:
         if result.returncode:
             raise SandboxError("Docker could not create the worker. Check the local toolchain image.")
 
-    def execute(self, name, limits, *, compiler_frame=False):
+    def execute(self, name, limits, *, compiler_frame=False, interaction=None):
         started = monotonic()
         with subprocess.Popen(
-            (*self._docker, "start", "--attach", name),
-            stdin=subprocess.DEVNULL,
+            (
+                *self._docker, "start", "--attach",
+                *(("--interactive",) if interaction is not None else ()), name,
+            ),
+            stdin=subprocess.PIPE if interaction is not None else subprocess.DEVNULL,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
+            bufsize=0,
             env=_DOCKER_ENVIRONMENT,
         ) as attached:
             try:
                 streams = [bytearray(), bytearray()]
                 code, early = _read_output(
                     attached, streams, limits.output_bytes, started + limits.timeout_seconds,
-                    compiler_frame=compiler_frame,
+                    compiler_frame=compiler_frame, interaction=interaction,
+                    runtime_deadline=started + MAX_RUNTIME_SECONDS,
                 )
             finally:
                 if attached.poll() is None:
@@ -205,25 +212,49 @@ def compiler_header(output):
     return phase, size
 
 
-def _read_output(attached, streams, cap, deadline, *, compiler_frame=False):
+def _read_output(attached, streams, cap, deadline, *, compiler_frame=False,
+                 interaction=None, runtime_deadline=None):
     remaining_bytes = cap
+    interactive_runtime = False
+    pending_input = b""
     with selectors.DefaultSelector() as selector:
         selector.register(attached.stdout, selectors.EVENT_READ, streams[0])
         if compiler_frame:
-            if not _read_compiler_frame(selector, streams[0], cap, deadline):
-                return None, ExecutionState.TIMEOUT
+            stopped = _read_compiler_frame(selector, streams[0], cap, deadline, interaction)
+            if stopped is not None:
+                return None, stopped
             remaining_bytes -= max(0, len(streams[0]) - COMPILER_FRAME.size)
+            if interaction is not None and len(streams[0]) >= COMPILER_FRAME.size:
+                phase, length = compiler_header(streams[0])
+                if len(streams[0]) == COMPILER_FRAME.size + length:
+                    for offset in range(COMPILER_FRAME.size, len(streams[0]), MAX_EVENT_CHUNK):
+                        interaction.emit(
+                            "diagnostics", bytes(streams[0][offset:offset + MAX_EVENT_CHUNK]),
+                        )
+                    if phase == 0:
+                        interaction.begin_runtime()
+                        os.set_blocking(attached.stdin.fileno(), False)
+                        interactive_runtime = True
+                        deadline = runtime_deadline
         selector.register(attached.stderr, selectors.EVENT_READ, streams[1])
-        while selector.get_map():
+        while selector.get_map() or (interaction is not None and attached.poll() is None):
+            stopped = _interrupt(interaction, deadline)
+            if stopped is not None:
+                return None, stopped
+            if interactive_runtime:
+                pending_input = _write_input(attached.stdin, interaction, pending_input)
             remaining_time = deadline - monotonic()
-            if remaining_time <= 0:
-                return None, ExecutionState.TIMEOUT
-            for key, _ in selector.select(remaining_time):
-                chunk = os.read(key.fd, min(65536, remaining_bytes + 1))
+            wait = min(POLL_SECONDS, remaining_time) if interaction is not None else remaining_time
+            for key, _ in selector.select(max(0, wait)):
+                chunk_size = MAX_EVENT_CHUNK if interaction is not None else 65536
+                chunk = os.read(key.fd, min(chunk_size, remaining_bytes + 1))
                 if not chunk:
                     selector.unregister(key.fileobj)
                     continue
-                key.data.extend(chunk[:remaining_bytes])
+                retained = chunk[:remaining_bytes]
+                key.data.extend(retained)
+                if interactive_runtime and retained:
+                    interaction.emit("stdout" if key.fileobj is attached.stdout else "stderr", retained)
                 remaining_bytes -= len(chunk)
                 if remaining_bytes < 0:
                     return None, ExecutionState.RESOURCE_LIMIT_EXCEEDED
@@ -233,26 +264,52 @@ def _read_output(attached, streams, cap, deadline, *, compiler_frame=False):
         return None, ExecutionState.TIMEOUT
 
 
-def _read_compiler_frame(selector, output, cap, deadline):
+def _interrupt(interaction, deadline):
+    if interaction is not None and (state := interaction.interruption()) is not None:
+        return state
+    if monotonic() >= deadline:
+        return ExecutionState.TIMEOUT
+    return None
+
+
+def _write_input(stream, interaction, pending):
+    if stream.closed:
+        return b""
+    data = pending or interaction.read_input()
+    if data is EOF:
+        stream.close()
+    elif data:
+        try:
+            return data[os.write(stream.fileno(), data):]
+        except BlockingIOError:
+            return data
+        except BrokenPipeError:
+            stream.close()
+    return b""
+
+
+def _read_compiler_frame(selector, output, cap, deadline, interaction):
     # The launcher writes its record to stdout before it can start the program.
     # Consume that record before charging runtime stderr to the shared budget.
     target = COMPILER_FRAME.size
     while len(output) < target:
+        stopped = _interrupt(interaction, deadline)
+        if stopped is not None:
+            return stopped
         remaining = deadline - monotonic()
-        if remaining <= 0:
-            return False
-        events = selector.select(remaining)
+        wait = min(POLL_SECONDS, remaining) if interaction is not None else remaining
+        events = selector.select(max(0, wait))
         if not events:
-            return False
+            continue
         key, _ = events[0]
         chunk = os.read(key.fd, target - len(output))
         if not chunk:
             selector.unregister(key.fileobj)
-            return True
+            return None
         output.extend(chunk)
         if target == COMPILER_FRAME.size and len(output) == target:
             _, size = compiler_header(output)
             if size > cap:
                 raise SandboxError("The native launcher exceeded its diagnostic budget.")
             target += size
-    return True
+    return None

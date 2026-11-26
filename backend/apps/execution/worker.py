@@ -4,6 +4,8 @@ from pathlib import Path, PurePosixPath
 from tempfile import TemporaryDirectory
 from uuid import uuid4
 
+from .interaction import MAX_STDIN_BYTES
+
 from .sandbox import (
     COMPILER_FRAME,
     DockerSandbox,
@@ -17,7 +19,6 @@ from .states import ExecutionSession, ExecutionState
 from .workspace import SourceFile, materialize_workspace, validate_workspace
 
 WORKSPACE_PREFIX = "arclis-worker-"
-MAX_STDIN_BYTES = 64 * 1024
 
 
 @dataclass(frozen=True)
@@ -36,10 +37,10 @@ class CompiledJob:
     program: tuple[str, ...]
     limits: SandboxLimits
 
-    def run(self, *, stdin=b""):
+    def run(self, *, stdin=b"", interaction=None):
         return run_compiled_job(
             self.workspace, self.toolchain, self.compiler, self.program,
-            stdin=stdin, limits=self.limits,
+            stdin=stdin, limits=self.limits, interaction=interaction,
         )
 
 
@@ -62,26 +63,31 @@ def run_job(
     return _run_job(validate_workspace(files), toolchain, argv, limits)
 
 
-def run_compiled_job(workspace, toolchain, compiler, program, *, stdin, limits):
+def run_compiled_job(workspace, toolchain, compiler, program, *, stdin, limits, interaction=None):
     """Run trusted compile and program argv with framed diagnostics and buffered stdin."""
     if not isinstance(limits, SandboxLimits):
         raise ValueError("Supply validated worker limits.")
     if not isinstance(stdin, bytes) or len(stdin) > MAX_STDIN_BYTES:
         raise ValueError("Standard input must be bytes and at most 64 KiB.")
 
+    mode = ("--interactive",) if interaction is not None else ()
     command = (
-        "python3", "-I", "/opt/arclis/native_job.py", str(limits.output_bytes),
+        "python3", "-I", "/opt/arclis/native_job.py", *mode, str(limits.output_bytes),
         str(len(compiler)), *compiler, *program,
     )
+    if interaction is not None:
+        return _run_job(workspace, toolchain, command, limits, interaction=interaction)
     return _run_job(workspace, toolchain, command, limits, native_stdin=stdin)
 
 
-def _run_job(validated, toolchain, argv, limits, *, native_stdin=None):
+def _run_job(validated, toolchain, argv, limits, *, native_stdin=None, interaction=None):
     job_id = uuid4().hex
     name = f"arclis-job-{job_id}"
     session = ExecutionSession()
     session.transition(ExecutionState.PREPARING)
     diagnostics = b""
+    if interaction is not None:
+        interaction.emit("status", ExecutionState.PREPARING)
 
     try:
         with TemporaryDirectory(prefix=f"{WORKSPACE_PREFIX}{job_id}-", dir="/tmp") as temporary:
@@ -93,19 +99,29 @@ def _run_job(validated, toolchain, argv, limits, *, native_stdin=None):
                 input_file.write_bytes(native_stdin)
                 input_file.chmod(0o644)
             sandbox = DockerSandbox(root / "docker")
-            sandbox.verify()
-            try:
-                sandbox.create(name, workspace, toolchain, argv, limits)
-                if native_stdin is None:
-                    session.transition(ExecutionState.RUNNING)
-                    outcome = sandbox.execute(name, limits)
-                else:
-                    session.transition(ExecutionState.COMPILING)
-                    outcome, diagnostics = _native_outcome(
-                        session, sandbox.execute(name, limits, compiler_frame=True)
+            stopped = interaction.interruption() if interaction is not None else None
+            if stopped is None:
+                sandbox.verify()
+                stopped = interaction.interruption() if interaction is not None else None
+            if stopped is None:
+                try:
+                    compiled = native_stdin is not None or interaction is not None
+                    sandbox.create(
+                        name, workspace, toolchain, argv, limits,
+                        interactive=interaction is not None,
                     )
-            finally:
-                sandbox.remove(name)
+                    session.transition(ExecutionState.COMPILING if compiled else ExecutionState.RUNNING)
+                    if interaction is not None:
+                        interaction.emit("status", ExecutionState.COMPILING)
+                    outcome = sandbox.execute(
+                        name, limits, compiler_frame=compiled, interaction=interaction,
+                    )
+                    if compiled:
+                        outcome, diagnostics = _native_outcome(session, outcome)
+                finally:
+                    sandbox.remove(name)
+            else:
+                outcome = SandboxOutcome(stopped)
     except SandboxError as error:
         outcome = SandboxOutcome(ExecutionState.INTERNAL_ERROR, error=str(error))
     except OSError:
@@ -114,6 +130,8 @@ def _run_job(validated, toolchain, argv, limits, *, native_stdin=None):
             error="The worker could not prepare, run, or clean up the local job.",
         )
 
+    if outcome.state is ExecutionState.CANCELLED:
+        session.transition(ExecutionState.CANCELLING)
     session.transition(outcome.state)
     return ExecutionResult(job_id, session.history, outcome, diagnostics)
 
@@ -123,6 +141,7 @@ def _native_outcome(session, outcome):
     interrupted = outcome.state in (
         ExecutionState.TIMEOUT,
         ExecutionState.RESOURCE_LIMIT_EXCEEDED,
+        ExecutionState.CANCELLED,
     )
     if len(output) < COMPILER_FRAME.size:
         if interrupted:

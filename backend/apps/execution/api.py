@@ -4,7 +4,7 @@ from ipaddress import ip_address
 from django.conf import settings
 from rest_framework import serializers
 from rest_framework.decorators import api_view, parser_classes
-from rest_framework.exceptions import APIException, NotFound, PermissionDenied, Throttled
+from rest_framework.exceptions import APIException, NotFound, ParseError, PermissionDenied, Throttled
 from rest_framework.parsers import JSONParser
 from rest_framework.response import Response
 
@@ -38,7 +38,10 @@ class BoundedJSONParser(JSONParser):
         data = stream.read(MAX_JSON_BYTES + 1)
         if len(data) > MAX_JSON_BYTES:
             raise RequestTooLarge()
-        return super().parse(BytesIO(data), media_type, parser_context)
+        try:
+            return super().parse(BytesIO(data), media_type, parser_context)
+        except RecursionError as error:
+            raise ParseError("JSON nesting is too deep.") from error
 
 
 class TextField(serializers.CharField):
