@@ -1,4 +1,5 @@
 import { samples, sourceText } from '../preview/samples.js';
+import { sumTemplates } from './sumTemplates.js';
 
 const maxFiles = 50;
 const maxSourceBytes = 1024 * 1024;
@@ -14,7 +15,10 @@ const sampleSymbols = {
 };
 
 export const languages = { c: 'C', cpp: 'C++', java: 'Java', python: 'Python' };
-export const templates = Object.entries(templateFiles).map(([id, name]) => ({ id, name, label: languages[id] }));
+export const templates = Object.entries(templateFiles).flatMap(([language, name]) => [
+  { id: language, language, name, label: languages[language] },
+  { id: language + '-sum', language, name, label: languages[language] + ' · Two-number sum' },
+]);
 
 export class ProjectFileError extends Error {}
 
@@ -57,16 +61,18 @@ export function executionTarget(file) {
 
 export function templateContent(path, template) {
   if (!template) return '';
+  const selected = templates.find(({ id }) => id === template);
   const target = executionTarget({ kind: 'file', path });
-  if (target?.language !== template) {
+  if (!selected || target?.language !== selected.language) {
     throw new ProjectFileError('Choose a source filename and folder path that match the template language.');
   }
-  if (template === 'java') {
+  const source = template.endsWith('-sum') ? sumTemplates[selected.language] : sourceText(samples[selected.language].lines);
+  if (selected.language === 'java') {
     const packageName = target.main_class.split('.').slice(0, -1).join('.');
     const header = packageName ? 'package ' + packageName + ';\n\n' : '';
-    return header + sourceText(samples.java.lines).replace('class Main {', 'class ' + basename(path).slice(0, -5) + ' {');
+    return header + source.replace('class Main {', 'class ' + basename(path).slice(0, -5) + ' {');
   }
-  return sourceText(samples[template].lines);
+  return source;
 }
 
 function validateEntries(entries) {
@@ -89,7 +95,8 @@ function validateEntries(entries) {
   }
 }
 
-export function createProject(firstId = 1) {
+export function createProject(firstId = 1, { empty = false } = {}) {
+  if (empty) return { entries: [], nextId: firstId, tabs: [], activeId: null, targetId: null };
   const entries = Object.entries(samples).map(([language, sample], index) => ({
     id: firstId + index, kind: 'file', path: sample.filename, content: sourceText(sample.lines), symbols: sampleSymbols[language],
   }));

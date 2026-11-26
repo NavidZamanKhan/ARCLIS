@@ -33,13 +33,17 @@ const initial = {
   result: null,
   error: '',
   inputClosed: false,
+  testCase: null,
   sequence: 0,
 };
 
 function update(run, event) {
   switch (event.type) {
     case 'start':
-      return { ...initial, state: 'CONNECTING', target: event.target, sequence: run.sequence + 1 };
+      return {
+        ...initial, state: 'CONNECTING', target: event.target, sequence: run.sequence + 1,
+        testCase: event.testCase ? { ...event.testCase, stdout: '' } : null,
+      };
     case 'status': {
       const build = { COMPILING: 'Compiling', RUNNING: 'Succeeded' }[event.state] ?? run.build;
       return { ...run, state: event.state, build };
@@ -62,10 +66,16 @@ function update(run, event) {
     case 'diagnostics':
       return { ...run, frames: [...run.frames, event], log: run.log + event.data };
     case 'stdout':
+      return {
+        ...run, frames: [...run.frames, event],
+        testCase: run.testCase ? { ...run.testCase, stdout: run.testCase.stdout + event.data } : null,
+      };
     case 'stderr':
       return { ...run, frames: [...run.frames, event] };
     case 'clear':
       return { ...run, frames: [] };
+    case 'reset':
+      return { ...initial, sequence: run.sequence + 1 };
     default:
       return run;
   }
@@ -86,6 +96,10 @@ export function useExecution() {
     input: client.input,
     endInput: client.endInput,
     clear: () => dispatch({ type: 'clear' }),
+    reset() {
+      client.dispose();
+      dispatch({ type: 'reset' });
+    },
     reject(target, message) {
       dispatch({ type: 'start', target });
       dispatch({ type: 'connection-error', message });

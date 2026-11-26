@@ -86,13 +86,19 @@ export function createSourceEditor(host, scope, onLineCount, onFileEdited) {
   return {
     syncFiles,
     setPreferences(preferences) {
-      const { lineNumbers } = preferences;
+      const { lineNumbers, fontSize, wordWrap, minimap } = preferences;
       tabSize = preferences.tabSize;
-      instance.updateOptions({ lineNumbers: lineNumbers ? 'on' : 'off' });
+      instance.updateOptions({
+        lineNumbers: lineNumbers ? 'on' : 'off', fontSize, lineHeight: Math.round(fontSize * 22 / 13),
+        wordWrap: wordWrap ? 'on' : 'off', minimap: { enabled: minimap },
+      });
       for (const { model } of models.values()) model.updateOptions({ tabSize, indentSize: tabSize, insertSpaces: true });
     },
     setTheme(theme) {
       applyEditorTheme(editor, theme);
+    },
+    focus() {
+      instance.focus();
     },
     runAction(id) {
       instance.focus();

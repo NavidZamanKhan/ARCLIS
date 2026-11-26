@@ -2,8 +2,9 @@ import { lazy, Suspense, useState } from 'react';
 import { Copy, Square, Terminal, Trash2 } from 'lucide-react';
 
 import { languages } from '../workspace/projectFiles.js';
+import { TestCases } from './TestCases.jsx';
 
-const views = { console: 'Console', build: 'Build log', details: 'Execution details' };
+const views = { console: 'Console', build: 'Build log', details: 'Execution details', tests: 'Test cases' };
 const TerminalSurface = lazy(() => import('./TerminalSurface.jsx'));
 
 function ConsoleInput({ execution }) {
@@ -37,11 +38,11 @@ function ConsoleInput({ execution }) {
   );
 }
 
-export function DebugPanel({ visible, workspaceHidden, theme, execution }) {
+export function DebugPanel({ visible, workspaceHidden, theme, execution, target, runCase }) {
   const [selection, setSelection] = useState(null);
   const [clipboard, setClipboard] = useState(null);
   const { run, label, active } = execution;
-  const view = selection?.sequence === run.sequence ? selection.view : 'console';
+  const view = selection?.sequence === run.sequence ? selection.view : run.testCase ? 'tests' : 'console';
   const canStop = active && run.state !== 'CANCELLING';
 
   async function copy() {
@@ -102,6 +103,9 @@ export function DebugPanel({ visible, workspaceHidden, theme, execution }) {
           {run.result && <><dt>Duration</dt><dd>{run.result.execution_time_ms} ms</dd></>}
         </dl>
         {run.error && <p>{run.error}</p>}
+      </div>
+      <div className="debug-report" hidden={view !== 'tests'}>
+        <TestCases target={target} execution={execution} runCase={runCase} />
       </div>
     </section>
   );

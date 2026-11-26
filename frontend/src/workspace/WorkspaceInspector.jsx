@@ -1,5 +1,5 @@
 import { AnalysisInspector } from '../analysis/AnalysisInspector.jsx';
-import { tabSizes } from './editorPreferences.js';
+import { fontSizes, tabSizes } from './editorPreferences.js';
 import { basename, executionTarget, extension, fileMode, languages } from './projectFiles.js';
 
 const encoder = new TextEncoder();
@@ -66,7 +66,7 @@ function BuildDetails({ target, execution, issueCount, showIssues }) {
 
 export function WorkspaceInspector({
   file, lineCount, readContent, files, targetId, target, selectTarget, preferences, setPreference,
-  visible, execution, issueCount, showIssues,
+  visible, execution, issueCount, showIssues, resetPreferences,
   mode, setMode, analysis, staleAnalysis, goToAnalysisRange,
 }) {
   return (
@@ -114,6 +114,23 @@ export function WorkspaceInspector({
                   {tabSizes.map((size) => <option key={size} value={size}>{size} spaces</option>)}
                 </select>
               </label>
+              <label>
+                Font size
+                <select value={preferences.fontSize} onChange={(event) => setPreference('fontSize', Number(event.target.value))}>
+                  {fontSizes.map((size) => <option key={size} value={size}>{size} px</option>)}
+                </select>
+              </label>
+              <label>
+                <input type="checkbox" checked={preferences.wordWrap}
+                  onChange={(event) => setPreference('wordWrap', event.target.checked)} />
+                Word wrap
+              </label>
+              <label>
+                <input type="checkbox" checked={preferences.minimap}
+                  onChange={(event) => setPreference('minimap', event.target.checked)} />
+                Minimap
+              </label>
+              <button type="button" className="inspector-issues-link" onClick={resetPreferences}>Reset editor preferences</button>
             </div>
           </>
         )}

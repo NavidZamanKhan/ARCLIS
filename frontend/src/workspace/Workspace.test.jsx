@@ -16,6 +16,7 @@ createSourceEditor.mockImplementation((host, scope, onLineCount) => ({
   },
   setTheme: vi.fn(),
   setPreferences: vi.fn(),
+  focus: vi.fn(),
   goToLocation: vi.fn(),
   goToSymbol: vi.fn(),
   runAction: vi.fn(),
@@ -64,7 +65,10 @@ it('routes editor actions and saves and restores editor preferences', async () =
 
   await user.click(screen.getByLabelText('Line numbers'));
   await user.selectOptions(screen.getByLabelText('Indentation'), '2');
-  const saved = { lineNumbers: false, tabSize: 2 };
+  await user.selectOptions(screen.getByLabelText('Font size'), '18');
+  await user.click(screen.getByLabelText('Word wrap'));
+  await user.click(screen.getByLabelText('Minimap'));
+  const saved = { lineNumbers: false, tabSize: 2, fontSize: 18, wordWrap: true, minimap: true };
   expect(editor.setPreferences).toHaveBeenLastCalledWith(saved);
   await user.click(screen.getByRole('radio', { name: 'Silver' }));
   expect(editor.setTheme).toHaveBeenLastCalledWith('silver');
@@ -75,6 +79,12 @@ it('routes editor actions and saves and restores editor preferences', async () =
   expect(createSourceEditor.mock.results[1].value.setPreferences).toHaveBeenLastCalledWith(saved);
   expect(screen.getByLabelText('Line numbers').checked).toBe(false);
   expect(screen.getByLabelText('Indentation').value).toBe('2');
+  expect(screen.getByLabelText('Font size').value).toBe('18');
+  expect(screen.getByLabelText('Word wrap').checked).toBe(true);
+  await user.click(screen.getByRole('button', { name: 'Reset editor preferences' }));
+  expect(createSourceEditor.mock.results[1].value.setPreferences).toHaveBeenLastCalledWith({
+    lineNumbers: true, tabSize: 4, fontSize: 13, wordWrap: false, minimap: false,
+  });
 });
 
 it('toggles each panel and keeps focus on the control used to hide it', async () => {
@@ -262,7 +272,7 @@ it('supports keyboard file actions and reopens a closed file from the jump bar',
   expect(screen.queryByRole('menu')).toBeNull();
 
   await user.click(screen.getByRole('button', { name: 'Close main.c' }));
-  expect(screen.getByText('Open a file from the navigator.')).toBeDefined();
+  expect(within(screen.getByRole('region', { name: 'Editor' })).getByRole('button', { name: 'Open file', exact: true })).toBeDefined();
   const jump = screen.getByLabelText('Jump to file');
   await user.selectOptions(jump, within(jump).getByRole('option', { name: 'main.c' }).value);
   expect(screen.getByLabelText('C source editor')).toBeDefined();

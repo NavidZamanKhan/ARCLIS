@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
   Braces, ChevronDown, ChevronRight, CircleAlert, Ellipsis, FileCode, Folder, FolderOpen, Plus, Search,
 } from 'lucide-react';
 
 import { IssueList, WorkspaceSearch } from './SourceLocations.jsx';
-import { basename, fileMode, languages, parentPath } from './projectFiles.js';
+import { basename, executionTarget, fileMode, languages, parentPath } from './projectFiles.js';
 
 const modes = [
   ['files', 'Files', FolderOpen], ['symbols', 'Symbols', Braces],
@@ -16,18 +16,33 @@ function FileMenu({ menu, close, choose }) {
   const isFolder = menu.item?.kind === 'folder' || !menu.item;
   const actions = [
     ...(isFolder ? [['new-file', 'New File'], ['new-folder', 'New Folder'], ['upload', 'Upload Files']] : [['download', 'Download']]),
-    ...(menu.item ? [['rename', 'Rename'], ['delete', 'Delete']] : []),
+    ...(executionTarget(menu.item) ? [['set-target', 'Set as Execution Target']] : []),
+    ...(menu.item ? [['copy-path', 'Copy Path'], ['rename', 'Rename'], ['delete', 'Delete']] : []),
     ...(!menu.item ? [['reset', 'Reset Workspace']] : []),
   ];
 
+  useLayoutEffect(() => {
+    const element = ref.current;
+    function position() {
+      const anchor = menu.anchor.getBoundingClientRect();
+      const bounds = element.getBoundingClientRect();
+      element.style.left = Math.max(8, Math.min(anchor.left, window.innerWidth - bounds.width - 8)) + 'px';
+      const top = anchor.bottom + 4 + bounds.height + 8 <= window.innerHeight ? anchor.bottom + 4 : anchor.top - bounds.height - 4;
+      element.style.top = Math.max(8, Math.min(top, window.innerHeight - bounds.height - 8)) + 'px';
+    }
+    position();
+    element.querySelector('button').focus();
+    window.addEventListener('resize', position);
+    return () => window.removeEventListener('resize', position);
+  }, [menu]);
+
   useEffect(() => {
-    ref.current.querySelector('button').focus();
     function outside(event) {
       if (!ref.current?.contains(event.target)) close(false);
     }
     document.addEventListener('pointerdown', outside);
     return () => document.removeEventListener('pointerdown', outside);
-  }, [menu, close]);
+  }, [close]);
 
   function handleKey(event) {
     if (event.key === 'Escape') {
@@ -47,7 +62,6 @@ function FileMenu({ menu, close, choose }) {
   return (
     <div
       ref={ref} className="project-menu" role="menu" aria-label="File actions"
-      style={{ left: menu.left, top: menu.top }}
       onKeyDown={handleKey}
       onBlur={(event) => {
         if (event.relatedTarget && !event.currentTarget.contains(event.relatedTarget)) close(false);
@@ -98,12 +112,7 @@ export function ProjectNavigator({
   }, [focusPath, visible, view, collapsed]);
 
   function openMenu(event, item, anchor = event.currentTarget) {
-    const rect = anchor.getBoundingClientRect();
-    setMenu({
-      item, anchor,
-      left: Math.max(8, Math.min(rect.left, window.innerWidth - 170)),
-      top: Math.max(8, Math.min(rect.bottom + 4, window.innerHeight - 176)),
-    });
+    setMenu({ item, anchor });
   }
 
   function toggleFolder(id) {
@@ -202,7 +211,7 @@ export function ProjectNavigator({
       {view === 'files' && (
         <>
           <h3 className="navigator-caption">Project files</h3>
-          {tree('') ?? <p className="navigator-empty">No project files.</p>}
+          {tree('') ?? <p className="navigator-empty">No project files. Use Project actions to add a file or folder.</p>}
         </>
       )}
       {view === 'symbols' && (

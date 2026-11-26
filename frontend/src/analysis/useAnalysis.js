@@ -75,5 +75,11 @@ export function useAnalysis() {
     }
   }
 
-  return { state, start };
+  function reset() {
+    pending.current?.abort();
+    pending.current = null;
+    setState(null);
+  }
+
+  return { state, start, reset };
 }

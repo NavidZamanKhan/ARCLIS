@@ -1,5 +1,5 @@
 import { useEffect, useId, useImperativeHandle, useRef } from 'react';
-import { ChevronRight, FileCode, ListOrdered, Replace, Search, X } from 'lucide-react';
+import { ChevronRight, FileCode, FolderOpen, ListOrdered, Replace, Search, X } from 'lucide-react';
 
 import { createSourceEditor } from './monaco.js';
 import { basename } from './projectFiles.js';
@@ -12,7 +12,7 @@ const actions = [
 
 export function SourceEditor({
   ref, files, activeFile, tabs, modified, openFile, closeTab, revealFolder, theme,
-  preferences, hidden, markersByFile, onLineCount, onFileEdited, location,
+  preferences, hidden, markersByFile, onLineCount, onFileEdited, location, showQuickOpen, createFile, focusRequest,
 }) {
   const host = useRef(null);
   const selectedTab = useRef(null);
@@ -35,6 +35,7 @@ export function SourceEditor({
   useEffect(() => { session.current.setPreferences(preferences); }, [preferences]);
   useEffect(() => { if (!hidden && activeFile) session.current.layout(); }, [hidden, activeFile]);
   useEffect(() => { if (location) session.current.goToLocation(location); }, [location]);
+  useEffect(() => { if (focusRequest) session.current.focus(); }, [focusRequest]);
   useEffect(() => {
     if (hidden) return;
     selectedTab.current?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
@@ -79,6 +80,10 @@ export function SourceEditor({
           })}
         </div>
         <div className="editor-actions" role="group" aria-label="Source editor actions">
+          <button type="button" aria-label="Quick Open" title="Quick Open" aria-keyshortcuts="Control+P Meta+P"
+            onClick={showQuickOpen}>
+            <FolderOpen size={16} aria-hidden="true" />
+          </button>
           {actions.map(([label, id, Icon]) => (
             <button
               key={id} type="button" aria-label={label} title={label} disabled={!activeFile}
@@ -114,7 +119,12 @@ export function SourceEditor({
       </nav>
       <div className="source-editor-frame">
         <div className="source-editor-host" ref={host} hidden={!activeFile} />
-        {!activeFile && <p className="editor-empty">Open a file from the navigator.</p>}
+        {!activeFile && (
+          <div className="editor-empty">
+            <p>{files.length ? 'No file open.' : 'Start with a source file.'}</p>
+            <button type="button" onClick={files.length ? showQuickOpen : createFile}>{files.length ? 'Open file' : 'New file'}</button>
+          </div>
+        )}
       </div>
     </section>
   );

@@ -7,11 +7,12 @@ import { makeExecutionPayload } from '../execution/payload.js';
 import { useExecution } from '../execution/useExecution.js';
 import { ProjectDialog } from './ProjectDialog.jsx';
 import { ProjectNavigator } from './ProjectNavigator.jsx';
+import { QuickOpen } from './QuickOpen.jsx';
 import { SourceEditor } from './SourceEditor.jsx';
 import { Splitter } from './Splitter.jsx';
 import { WorkspaceInspector } from './WorkspaceInspector.jsx';
 import { WorkspaceToolbar } from './WorkspaceToolbar.jsx';
-import { readEditorPreferences, saveEditorPreferences } from './editorPreferences.js';
+import { editorDefaults, readEditorPreferences, saveEditorPreferences } from './editorPreferences.js';
 import { clampSize, panelOptions } from './panelLayout.js';
 import { currentIssues, issueMarkers, readBuildIssues } from './sourceLocations.js';
 import { useWorkspaceProject } from './useWorkspaceProject.js';
@@ -27,6 +28,7 @@ export function Workspace({ hidden, layout, onResize, showPanel, theme, toolbar,
   const editor = useRef(null);
   const uploadInput = useRef(null);
   const uploadFolder = useRef(null);
+  const uploadGeneration = useRef(0);
   const {
     project, currentProject, modified, markFile, readContent, contentVersion, updateProject, saveNow, storageIssue, loading,
   } = useWorkspaceProject();
@@ -36,6 +38,8 @@ export function Workspace({ hidden, layout, onResize, showPanel, theme, toolbar,
   const [buildSources, setBuildSources] = useState(new Map());
   const [reveal, setReveal] = useState(null);
   const [dialog, setDialog] = useState(null);
+  const [quickOpen, setQuickOpen] = useState(false);
+  const [editorFocusRequest, setEditorFocusRequest] = useState(0);
   const [feedback, setFeedback] = useState(null);
   const [lineCount, setLineCount] = useState(0);
   const [preferences, setPreferences] = useState(readEditorPreferences);
@@ -101,7 +105,7 @@ export function Workspace({ hidden, layout, onResize, showPanel, theme, toolbar,
     void analysis.start(activeFile, readContent(activeFile), analysisLanguage);
   }
 
-  function runTarget() {
+  function runTarget(testCase = null) {
     if (!target || execution.active) return;
     showPanel('debug');
     const { entries, targetId } = currentProject.current;
@@ -115,7 +119,8 @@ export function Workspace({ hidden, layout, onResize, showPanel, theme, toolbar,
     }
     const ids = new Map(entries.filter(({ kind }) => kind === 'file').map(({ path, id }) => [path, id]));
     setBuildSources(new Map(payload.files.map((file) => [file.path, { ...file, id: ids.get(file.path) }])));
-    void execution.start(payload);
+    if (testCase) payload.stdin = testCase.stdin;
+    void execution.start(payload, testCase);
   }
 
   const handleShortcut = useEffectEvent((event) => {
@@ -128,6 +133,9 @@ export function Workspace({ hidden, layout, onResize, showPanel, theme, toolbar,
     } else if (key === 's' && !event.shiftKey) {
       event.preventDefault();
       saveNow();
+    } else if (key === 'p' && !event.shiftKey) {
+      event.preventDefault();
+      setQuickOpen(true);
     } else if (key === 'enter') {
       event.preventDefault();
       if (event.shiftKey) execution.stop();
@@ -135,7 +143,7 @@ export function Workspace({ hidden, layout, onResize, showPanel, theme, toolbar,
     }
   });
 
-  function choose(type, item) {
+  async function choose(type, item) {
     setFeedback(null);
     if (type === 'upload') {
       uploadFolder.current = item?.id ?? null;
@@ -150,6 +158,16 @@ export function Workspace({ hidden, layout, onResize, showPanel, theme, toolbar,
       download.click();
       download.remove();
       setTimeout(() => URL.revokeObjectURL(url), 0);
+    } else if (type === 'set-target') {
+      updateProject((state) => ({ ...state, targetId: item.id }));
+      setFeedback({ message: 'Execution target set to ' + item.path + '.' });
+    } else if (type === 'copy-path') {
+      try {
+        await navigator.clipboard.writeText(item.path);
+        setFeedback({ message: 'Relative path copied.' });
+      } catch {
+        setFeedback({ message: 'Clipboard unavailable.', error: true });
+      }
     } else {
       setDialog({ type, item });
     }
@@ -159,10 +177,12 @@ export function Workspace({ hidden, layout, onResize, showPanel, theme, toolbar,
     const input = event.currentTarget;
     const selected = [...input.files];
     const folderId = uploadFolder.current;
+    const generation = uploadGeneration.current;
     input.value = '';
     if (!selected.length) return;
     try {
       const uploads = await readUploads(selected, '');
+      if (generation !== uploadGeneration.current) return;
       updateProject((state) => {
         const folder = state.entries.find((entry) => entry.id === folderId);
         if (folderId !== null && !folder) throw new ProjectFileError('The destination folder no longer exists.');
@@ -172,28 +192,40 @@ export function Workspace({ hidden, layout, onResize, showPanel, theme, toolbar,
       setFeedback({ message: selected.length === 1 ? 'File uploaded.' : selected.length + ' files uploaded.' });
     } catch (error) {
       if (!(error instanceof ProjectFileError)) throw error;
+      if (generation !== uploadGeneration.current) return;
       setFeedback({ message: error.message, error: true });
     }
   }
 
-  function applyFileAction({ type, item }, name, template) {
+  function applyFileAction({ type, item }, name, template, { ownFolder, resetMode }) {
     if (type === 'rename') {
       updateProject((state) => renameEntry(state, item.id, name));
     } else if (type === 'delete') {
       updateProject((state) => deleteEntry(state, item.id));
       setReveal({ path: parentPath(item.path) });
     } else if (type === 'reset') {
-      updateProject((state) => createProject(state.nextId));
+      uploadGeneration.current++;
+      execution.reset();
+      analysis.reset();
+      setBuildSources(new Map());
+      setLocation(null);
+      setInspectorMode('file');
+      updateProject((state) => createProject(state.nextId, { empty: resetMode === 'empty' }));
       setReveal({ path: '' });
+      setFeedback({ message: resetMode === 'empty' ? 'Empty workspace ready.' : 'Sample files restored.' });
     } else {
+      const parent = item?.path ?? '';
+      const folder = ownFolder ? joinPath(parent, name.slice(0, name.lastIndexOf('.'))) : parent;
+      const path = joinPath(folder, name);
+      const additions = ownFolder ? [{ kind: 'folder', path: folder }] : [];
+      additions.push(type === 'new-file'
+        ? { kind: 'file', path, content: templateContent(path, template) }
+        : { kind: 'folder', path });
       updateProject((state) => {
-        const path = joinPath(item?.path ?? '', name);
-        const entry = type === 'new-file'
-          ? { kind: 'file', path, content: templateContent(path, template) }
-          : { kind: 'folder', path };
-        return addEntries(state, [entry]);
+        const next = addEntries(state, additions);
+        return template.endsWith('-sum') ? { ...next, targetId: next.activeId } : next;
       });
-      if (item) setReveal({ path: item.path });
+      if (folder) setReveal({ path: folder });
     }
   }
 
@@ -234,12 +266,14 @@ export function Workspace({ hidden, layout, onResize, showPanel, theme, toolbar,
     <>
       <WorkspaceToolbar
         {...toolbar} theme={theme} layout={layout} showPreview={hidden}
-        target={loading ? null : target} execution={execution} runTarget={runTarget}
+        target={loading ? null : target} execution={execution} runTarget={() => runTarget()}
         canAnalyze={Boolean(canAnalyze)} analyzeActiveFile={analyzeActiveFile} analysisStatus={analysis.state?.status}
       />
       {storageIssue && !hidden && <p className="workspace-save-alert" role="alert">{storageIssue}</p>}
       {loading ? (
-        <main className="workspace-loading" aria-label="Workspace" hidden={hidden}>Loading workspace…</main>
+        <main className="workspace-loading" aria-label="Workspace" aria-busy="true" hidden={hidden}>
+          <p role="status">Opening workspace…</p>
+        </main>
       ) : (
         <main className="workspace-layout" aria-label="Workspace" ref={viewport} hidden={hidden} style={tracks}>
           <ProjectNavigator
@@ -255,9 +289,12 @@ export function Workspace({ hidden, layout, onResize, showPanel, theme, toolbar,
               openFile={selectFile} closeTab={(id) => updateProject((state) => closeTab(state, id))}
               revealFolder={revealFolder} theme={theme} hidden={hidden} preferences={preferences}
               markersByFile={markers} onLineCount={setLineCount} onFileEdited={markFile} location={location}
+              showQuickOpen={() => setQuickOpen(true)} createFile={() => choose('new-file')}
+              focusRequest={editorFocusRequest}
             />
             {splitter('debug')}
-            <DebugPanel visible={layout.debug.visible} execution={execution} theme={theme} workspaceHidden={hidden} />
+            <DebugPanel visible={layout.debug.visible} execution={execution} theme={theme} workspaceHidden={hidden}
+              target={target} runCase={runTarget} />
           </div>
           {splitter('inspector')}
           <WorkspaceInspector
@@ -265,6 +302,7 @@ export function Workspace({ hidden, layout, onResize, showPanel, theme, toolbar,
             selectTarget={(targetId) => updateProject((state) => ({ ...state, targetId }))}
             preferences={preferences} visible={layout.inspector.visible}
             setPreference={(key, value) => setPreferences((previous) => ({ ...previous, [key]: value }))}
+            resetPreferences={() => setPreferences(editorDefaults)}
             target={target} execution={execution} issueCount={issues.length} showIssues={() => showNavigatorMode('issues')}
             mode={inspectorMode} setMode={setInspectorMode} analysis={analysis.state}
             staleAnalysis={staleAnalysis} goToAnalysisRange={goToAnalysisRange}
@@ -279,6 +317,12 @@ export function Workspace({ hidden, layout, onResize, showPanel, theme, toolbar,
               occupied={new Set(project.entries.filter(({ path }) => parentPath(path) === (dialog.item?.path ?? ''))
                 .map(({ path }) => basename(path)))}
             />
+          )}
+          {quickOpen && (
+            <QuickOpen files={files} close={() => setQuickOpen(false)} openFile={(id) => {
+              selectFile(id);
+              setEditorFocusRequest((request) => request + 1);
+            }} />
           )}
         </main>
       )}

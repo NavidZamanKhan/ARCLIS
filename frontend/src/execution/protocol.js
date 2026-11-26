@@ -111,11 +111,19 @@ export function createExecutionClient(onEvent, { request = globalThis.fetch, Soc
     }
   }
 
-  async function start(payload) {
+  function endInput() {
+    if (!active?.running || active.stopping || active.inputClosed) return 'Standard input is unavailable.';
+    if (!send(active, { type: 'eof' })) return 'End of input could not be sent.';
+    active.inputClosed = true;
+    onEvent({ type: 'input-closed' });
+    return '';
+  }
+
+  async function start(payload, testCase = null) {
     if (active) return;
     const attempt = { abort: new AbortController(), running: false, inputClosed: false, stopping: false };
     active = attempt;
-    onEvent({ type: 'start', target: { language: payload.language, entry_file: payload.entry_file } });
+    onEvent({ type: 'start', target: { language: payload.language, entry_file: payload.entry_file }, ...(testCase && { testCase }) });
     deadline(attempt, 15000, 'Timed out connecting to the local execution server.');
     const body = JSON.stringify(payload);
     if (encoder.encode(body).length > 2 * 1024 * 1024) {
@@ -170,6 +178,10 @@ export function createExecutionClient(onEvent, { request = globalThis.fetch, Soc
         }
         if (packet.type === 'error' && packet.code === 'stdin_rejected') attempt.inputClosed = false;
         onEvent(packet);
+        if (testCase && packet.type === 'status' && packet.state === 'RUNNING' && !attempt.inputClosed) {
+          const problem = endInput();
+          if (problem) failure(attempt, problem);
+        }
       });
       socket.addEventListener('error', () => failure(attempt, 'Could not connect to the local execution socket.'));
       socket.addEventListener('close', () => failure(attempt, 'The local execution connection closed before a result arrived.'));
@@ -202,13 +214,7 @@ export function createExecutionClient(onEvent, { request = globalThis.fetch, Soc
       if (!send(active, { type: 'stdin', data })) return 'The input could not be sent.';
       return '';
     },
-    endInput() {
-      if (!active?.running || active.stopping || active.inputClosed) return 'Standard input is unavailable.';
-      if (!send(active, { type: 'eof' })) return 'End of input could not be sent.';
-      active.inputClosed = true;
-      onEvent({ type: 'input-closed' });
-      return '';
-    },
+    endInput,
     dispose() {
       if (active) release(active);
     },

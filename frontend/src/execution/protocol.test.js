@@ -87,6 +87,22 @@ it('sends Stop once and keeps the backend result authoritative', async () => {
   expect(harness.events.at(-1)).toMatchObject({ type: 'result', state: 'CANCELLED' });
 });
 
+it('sends case input in the session request and closes stdin once runtime starts', async () => {
+  const harness = setup();
+  const testCase = { name: 'Mixed signs', stdin: '-3 5\n', expected: '2\n' };
+  await harness.client.start({ ...payload, stdin: testCase.stdin }, testCase);
+  expect(JSON.parse(harness.request.mock.calls[0][1].body)).toEqual({ ...payload, stdin: testCase.stdin });
+  expect(harness.events[0].testCase).toEqual(testCase);
+  harness.socket.open();
+  harness.socket.message({ type: 'status', state: 'COMPILING' });
+  expect(harness.socket.send).not.toHaveBeenCalled();
+  harness.socket.message({ type: 'status', state: 'RUNNING' });
+  harness.socket.message({ type: 'status', state: 'RUNNING' });
+  expect(harness.socket.send.mock.calls).toEqual([['{"type":"eof"}']]);
+  expect(harness.client.input('late')).toBe('Standard input is unavailable.');
+  harness.client.dispose();
+});
+
 it('aborts a pending request on Stop and ignores its late response', async () => {
   let complete;
   const request = vi.fn(() => new Promise((resolve) => { complete = resolve; }));
