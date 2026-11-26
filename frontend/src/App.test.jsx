@@ -5,6 +5,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import App from './App.jsx';
 import { THEME_STORAGE_KEY } from './theme/preferences.js';
 
+vi.mock('./workspace/SourceEditor.jsx', () => ({ SourceEditor: () => null }));
+
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();

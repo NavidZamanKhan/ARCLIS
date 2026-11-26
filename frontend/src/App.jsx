@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useLayoutEffect, useState } from 'react';
 
 import { ComponentPreview } from './preview/ComponentPreview.jsx';
 import { readTheme, saveTheme } from './theme/preferences.js';
@@ -11,7 +11,7 @@ export default function App() {
   const [showPreview, setShowPreview] = useState(false);
   const [layout, setLayout] = useState(defaultLayout);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     document.documentElement.dataset.theme = theme;
     saveTheme(theme);
   }, [theme]);
@@ -33,7 +33,7 @@ export default function App() {
         showPreview={showPreview} toggleView={() => setShowPreview(!showPreview)}
         resetLayout={() => setLayout(defaultLayout())}
       />
-      <Workspace hidden={showPreview} layout={layout} onResize={resizePanel} />
+      <Workspace hidden={showPreview} layout={layout} onResize={resizePanel} theme={theme} />
       {showPreview && (
         <main className="preview">
           <h1>Cupertino Graphite</h1>

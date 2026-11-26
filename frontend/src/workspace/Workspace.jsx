@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import { Braces, FileCode, FolderOpen, Terminal } from 'lucide-react';
 
-import { SourceCode } from '../components/SourceCode.jsx';
 import { samples } from '../preview/samples.js';
+import { SourceEditor } from './SourceEditor.jsx';
 import { Splitter } from './Splitter.jsx';
+import { readEditorPreferences, saveEditorPreferences, tabSizes } from './editorPreferences.js';
 import { clampSize, panelOptions } from './panelLayout.js';
 
 const files = Object.entries(samples);
+const emptyMarkers = {};
 const symbols = {
   c: ['sum_to', 'main'],
   cpp: ['sum_to', 'main'],
@@ -14,7 +16,7 @@ const symbols = {
   python: ['sum_to'],
 };
 
-function Navigator({ language, selectFile, visible }) {
+function Navigator({ language, selectFile, goToSymbol, visible }) {
   const [view, setView] = useState('files');
 
   return (
@@ -54,8 +56,10 @@ function Navigator({ language, selectFile, visible }) {
           <h3 className="navigator-caption">Sample declarations</h3>
           <ul className="navigator-list">
             {symbols[language].map((symbol) => (
-              <li className="navigator-symbol font-mono" key={symbol}>
-                <Braces size={15} aria-hidden="true" />{symbol}
+              <li key={symbol}>
+                <button type="button" className="navigator-file font-mono" onClick={() => goToSymbol(symbol)}>
+                  <Braces size={15} aria-hidden="true" />{symbol}
+                </button>
               </li>
             ))}
           </ul>
@@ -65,7 +69,7 @@ function Navigator({ language, selectFile, visible }) {
   );
 }
 
-function Inspector({ sample, visible }) {
+function Inspector({ sample, lineCount, preferences, setPreference, visible }) {
   return (
     <aside className="workspace-inspector" id="workspace-inspector" aria-label="Inspector" hidden={!visible}>
       <div className="workspace-bar"><h2>Inspector</h2></div>
@@ -74,9 +78,24 @@ function Inspector({ sample, visible }) {
         <dl>
           <dt>Name</dt><dd>{sample.filename}</dd>
           <dt>Language</dt><dd>{sample.label}</dd>
-          <dt>Lines</dt><dd>{sample.lines.length}</dd>
-          <dt>Access</dt><dd>Read-only</dd>
+          <dt>Lines</dt><dd>{lineCount}</dd>
         </dl>
+        <h3 className="inspector-heading">Editor preferences</h3>
+        <div className="editor-preferences">
+          <label>
+            <input
+              type="checkbox" checked={preferences.lineNumbers}
+              onChange={(event) => setPreference('lineNumbers', event.target.checked)}
+            />
+            Line numbers
+          </label>
+          <label>
+            Indentation
+            <select value={preferences.tabSize} onChange={(event) => setPreference('tabSize', Number(event.target.value))}>
+              {tabSizes.map((size) => <option key={size} value={size}>{size} spaces</option>)}
+            </select>
+          </label>
+        </div>
       </div>
     </aside>
   );
@@ -93,11 +112,16 @@ function DebugPanel({ visible }) {
   );
 }
 
-export function Workspace({ hidden, layout, onResize }) {
+export function Workspace({ hidden, layout, onResize, theme, markersByFile = emptyMarkers }) {
   const viewport = useRef(null);
+  const editor = useRef(null);
   const [language, setLanguage] = useState('c');
+  const [lineCount, setLineCount] = useState(0);
+  const [preferences, setPreferences] = useState(readEditorPreferences);
   const [extent, setExtent] = useState({ width: 1200, height: 800 });
   const sample = samples[language];
+
+  useEffect(() => { saveEditorPreferences(preferences); }, [preferences]);
 
   useEffect(() => {
     if (hidden || typeof ResizeObserver === 'undefined') return undefined;
@@ -126,21 +150,24 @@ export function Workspace({ hidden, layout, onResize }) {
 
   return (
     <main className="workspace-layout" aria-label="Sample workspace" ref={viewport} hidden={hidden} style={tracks}>
-      <Navigator language={language} selectFile={setLanguage} visible={layout.navigator.visible} />
+      <Navigator
+        language={language} selectFile={setLanguage} visible={layout.navigator.visible}
+        goToSymbol={(symbol) => editor.current?.goToSymbol(symbol)}
+      />
       {splitter('navigator')}
       <div className="workspace-center">
-        <section className="workspace-editor" aria-label="Editor">
-          <div className="workspace-bar editor-bar">
-            <span className="editor-file"><FileCode size={16} aria-hidden="true" />{sample.filename}</span>
-            <span className="source-mode">Read-only</span>
-          </div>
-          <SourceCode sample={sample} />
-        </section>
+        <SourceEditor
+          ref={editor} language={language} theme={theme} hidden={hidden}
+          preferences={preferences} markersByFile={markersByFile} onLineCount={setLineCount}
+        />
         {splitter('debug')}
         <DebugPanel visible={layout.debug.visible} />
       </div>
       {splitter('inspector')}
-      <Inspector sample={sample} visible={layout.inspector.visible} />
+      <Inspector
+        sample={sample} lineCount={lineCount} preferences={preferences} visible={layout.inspector.visible}
+        setPreference={(key, value) => setPreferences((previous) => ({ ...previous, [key]: value }))}
+      />
     </main>
   );
 }

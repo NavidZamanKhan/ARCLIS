@@ -1,10 +1,32 @@
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, expect, it } from 'vitest';
+import { afterEach, expect, it, vi } from 'vitest';
 
 import App from '../App.jsx';
+import { samples } from '../preview/samples.js';
+import { createSourceEditor } from './monaco.js';
 
-afterEach(cleanup);
+vi.mock('./monaco.js', () => ({ createSourceEditor: vi.fn() }));
+
+createSourceEditor.mockImplementation((host, scope, onLineCount) => ({
+  open(language) {
+    host.setAttribute('aria-label', samples[language].label + ' source editor');
+    onLineCount(samples[language].lines.length + 1);
+  },
+  setTheme: vi.fn(),
+  setPreferences: vi.fn(),
+  setMarkers: vi.fn(),
+  goToSymbol: vi.fn(),
+  runAction: vi.fn(),
+  layout: vi.fn(),
+  dispose: vi.fn(),
+}));
+
+afterEach(() => {
+  cleanup();
+  localStorage.clear();
+  createSourceEditor.mockClear();
+});
 
 it('shows the workspace regions and keeps the navigator, editor, and inspector in sync', async () => {
   const user = userEvent.setup();
@@ -19,11 +41,39 @@ it('shows the workspace regions and keeps the navigator, editor, and inspector i
 
   await user.click(java);
   expect(java.getAttribute('aria-current')).toBe('true');
-  expect(within(editor).getByLabelText('Java source sample')).toBeDefined();
+  expect(within(editor).getByLabelText('Java source editor')).toBeDefined();
   expect(within(inspector).getByText('Main.java')).toBeDefined();
 
   await user.click(within(navigator).getByRole('button', { name: 'Symbols' }));
-  expect(within(navigator).getByText('sumTo')).toBeDefined();
+  await user.click(within(navigator).getByRole('button', { name: 'sumTo' }));
+  expect(createSourceEditor.mock.results[0].value.goToSymbol).toHaveBeenCalledWith('sumTo');
+});
+
+it('routes editor actions and saves and restores editor preferences', async () => {
+  const user = userEvent.setup();
+  const { unmount } = render(<App />);
+  const editor = createSourceEditor.mock.results[0].value;
+
+  await user.click(screen.getByRole('button', { name: 'Find', exact: true }));
+  await user.click(screen.getByRole('button', { name: 'Replace', exact: true }));
+  await user.click(screen.getByRole('button', { name: 'Go to line' }));
+  expect(editor.runAction.mock.calls).toEqual([
+    ['actions.find'], ['editor.action.startFindReplaceAction'], ['editor.action.gotoLine'],
+  ]);
+
+  await user.click(screen.getByLabelText('Line numbers'));
+  await user.selectOptions(screen.getByLabelText('Indentation'), '2');
+  const saved = { lineNumbers: false, tabSize: 2 };
+  expect(editor.setPreferences).toHaveBeenLastCalledWith(saved);
+  await user.click(screen.getByRole('radio', { name: 'Silver' }));
+  expect(editor.setTheme).toHaveBeenLastCalledWith('silver');
+
+  unmount();
+  expect(editor.dispose).toHaveBeenCalledOnce();
+  render(<App />);
+  expect(createSourceEditor.mock.results[1].value.setPreferences).toHaveBeenLastCalledWith(saved);
+  expect(screen.getByLabelText('Line numbers').checked).toBe(false);
+  expect(screen.getByLabelText('Indentation').value).toBe('2');
 });
 
 it('toggles each panel and keeps focus on the control used to hide it', async () => {
@@ -99,7 +149,7 @@ it('dismisses the View menu from the keyboard and keeps the workspace selection 
   expect(screen.queryByRole('region', { name: 'Editor' })).toBeNull();
   await user.click(view);
   await user.click(screen.getByRole('button', { name: 'Workspace' }));
-  expect(screen.getByLabelText('Java source sample')).toBeDefined();
+  expect(screen.getByLabelText('Java source editor')).toBeDefined();
 });
 
 it('restores visibility and sizes only after reset confirmation', async () => {

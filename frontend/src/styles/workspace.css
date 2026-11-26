@@ -180,9 +180,15 @@
   flex-direction: column;
 }
 
-.workspace-editor .source-code {
+.source-editor-frame {
+  position: relative;
   min-height: 4rem;
   flex: 1;
+}
+
+.source-editor-host {
+  position: absolute;
+  inset: 0;
 }
 
 .workspace-bar {
@@ -214,6 +220,26 @@
 
 .editor-file svg {
   color: var(--accent);
+}
+
+.editor-actions {
+  display: flex;
+  gap: var(--space-1);
+}
+
+.editor-actions button {
+  display: grid;
+  width: 2rem;
+  height: 2rem;
+  place-items: center;
+  border-radius: var(--control-radius);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.editor-actions button:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
 }
 
 .navigator-selector {
@@ -259,8 +285,7 @@
   padding-inline: var(--space-2);
 }
 
-.navigator-file,
-.navigator-symbol {
+.navigator-file {
   display: flex;
   min-height: 2rem;
   width: 100%;
@@ -270,9 +295,6 @@
   border-radius: var(--control-radius);
   font-size: 0.875rem;
   text-align: start;
-}
-
-.navigator-file {
   cursor: pointer;
 }
 
@@ -281,8 +303,7 @@
   color: var(--selection-ink);
 }
 
-.navigator-file svg,
-.navigator-symbol svg {
+.navigator-file svg {
   flex: none;
 }
 
@@ -292,7 +313,9 @@
 }
 
 .navigator-selector button:focus-visible,
-.navigator-file:focus-visible {
+.navigator-file:focus-visible,
+.editor-actions button:focus-visible,
+.editor-preferences :is(input, select):focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
@@ -312,6 +335,34 @@
 .inspector-body dd {
   min-width: 0;
   overflow-wrap: anywhere;
+}
+
+.editor-preferences {
+  display: grid;
+  gap: var(--space-2);
+  padding-inline: var(--space-3);
+  padding-bottom: var(--space-3);
+  font-size: 0.875rem;
+}
+
+.editor-preferences label {
+  display: flex;
+  min-height: 2rem;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.editor-preferences input {
+  accent-color: var(--accent);
+}
+
+.editor-preferences select {
+  min-height: 2rem;
+  border: 1px solid var(--border-control);
+  border-radius: var(--control-radius);
+  background: var(--surface-workspace);
+  padding-inline: var(--space-2);
 }
 
 .workspace-debug {
@@ -397,7 +448,7 @@
     border-inline: 0;
   }
 
-  .workspace-editor .source-code {
+  .source-editor-frame {
     min-height: 17rem;
   }
 
