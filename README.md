@@ -74,12 +74,10 @@ Build the three images from the repository root:
 ```bash
 (
   set -e
-  for target in c-cpp java; do
+  for target in c-cpp java python; do
     docker build --file docker/toolchains.Dockerfile --target "$target" \
       --tag "arclis-toolchain-$target:s05" docker
   done
-  docker build --file docker/toolchains.Dockerfile --target python \
-    --tag arclis-toolchain-python:s03 docker
 )
 ```
 
@@ -142,3 +140,16 @@ processing disabled and runs the selected class from job-local scratch.
 Java defaults to 384 MiB of container memory with a minimum of 192 MiB. The
 compiler and runtime each limit their heap to one third of that container
 budget. They share the job's time and output budgets.
+
+### Python adapter
+
+Back-end callers use `apps.execution.python.run_python` with an exact submitted
+`.py` entry path, the submitted `SourceFile` objects, and optional buffered
+stdin. The adapter syntax-checks every submitted file before executing the
+entry with CPython. Syntax errors return `COMPILATION_FAILED` with diagnostics.
+Uncaught runtime exceptions return `RUNTIME_FAILED` with the program's stderr
+and exit code.
+
+Imports can use the entry file's directory, the workspace root, and the
+standard library. The interpreter starts with a clean environment, site
+packages disabled, and bytecode writes disabled.

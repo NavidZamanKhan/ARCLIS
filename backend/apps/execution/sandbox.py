@@ -28,8 +28,7 @@ class Toolchain(StrEnum):
 
     @property
     def image(self):
-        tag = "s03" if self is Toolchain.PYTHON else "s05"
-        return f"arclis-toolchain-{self.value}:{tag}"
+        return f"arclis-toolchain-{self.value}:s05"
 
 
 @dataclass(frozen=True)
