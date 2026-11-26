@@ -1,0 +1,149 @@
+@import "tailwindcss";
+@import "./tokens.css";
+
+@theme inline {
+  --font-sans: var(--ui-font);
+  --font-mono: var(--code-font);
+  --color-workspace: var(--surface-workspace);
+}
+
+@layer base {
+  body {
+    background: var(--surface-workspace);
+    color: var(--text-primary);
+    font-family: var(--ui-font);
+  }
+
+  ::selection {
+    background: var(--surface-selected);
+    color: var(--selection-ink);
+  }
+}
+
+.app-bar {
+  background: var(--surface-navigator);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.app-bar-inner {
+  display: flex;
+  min-height: 4rem;
+  max-width: 78rem;
+  margin-inline: auto;
+  padding: var(--space-2) clamp(1rem, 4vw, 2.5rem);
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.brand-name {
+  font-size: 0.875rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+}
+
+.brand-mark {
+  display: grid;
+  place-items: center;
+  inline-size: 2.125rem;
+  block-size: 2.125rem;
+  border-radius: 0.5rem;
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.brand-mark span {
+  position: relative;
+  display: block;
+  block-size: 1rem;
+  inline-size: 0.125rem;
+  background: currentColor;
+  transform: rotate(29deg);
+}
+
+.brand-mark span::before,
+.brand-mark span::after {
+  position: absolute;
+  content: "";
+  inline-size: 0.36rem;
+  block-size: 0.36rem;
+  border: 0.125rem solid currentColor;
+  transform: rotate(16deg);
+}
+
+.brand-mark span::before {
+  inset: 0.15rem auto auto -0.48rem;
+  border-right: 0;
+  border-top: 0;
+}
+
+.brand-mark span::after {
+  inset: auto -0.48rem 0.15rem auto;
+  border-left: 0;
+  border-bottom: 0;
+}
+
+.theme-selector {
+  display: flex;
+  align-items: center;
+  gap: 0.125rem;
+  min-inline-size: 0;
+  padding: 0.1875rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: calc(var(--control-radius) + 0.125rem);
+  background: var(--surface-console);
+}
+
+.theme-option {
+  display: flex;
+  min-height: 1.875rem;
+  align-items: center;
+  gap: var(--space-2);
+  padding-inline: var(--space-3);
+  border-radius: var(--control-radius);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 550;
+}
+
+.theme-option:hover {
+  background: var(--surface-hover);
+}
+
+.theme-selector input:checked + .theme-option {
+  background: var(--surface-selection-inactive);
+  color: var(--text-primary);
+  box-shadow: inset 0 0 0 1px var(--border-control);
+}
+
+.theme-selector input:focus-visible + .theme-option {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.preview {
+  max-width: 78rem;
+  margin-inline: auto;
+  padding: clamp(1.75rem, 5vw, 3.75rem) clamp(1rem, 4vw, 2.5rem) var(--space-12);
+}
+
+.preview h1 {
+  font-size: clamp(1.875rem, 4vw, 2.75rem);
+  font-weight: 660;
+  letter-spacing: -0.045em;
+  line-height: 1.15;
+}
+
+.preview-description {
+  margin-block: var(--space-2) var(--space-8);
+  color: var(--text-secondary);
+  line-height: 1.55;
+}
