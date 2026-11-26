@@ -1,5 +1,4 @@
-import { useState } from 'react';
-
+import { AnalysisInspector } from '../analysis/AnalysisInspector.jsx';
 import { tabSizes } from './editorPreferences.js';
 import { basename, executionTarget, extension, fileMode, languages } from './projectFiles.js';
 
@@ -68,31 +67,36 @@ function BuildDetails({ target, execution, issueCount, showIssues }) {
 export function WorkspaceInspector({
   file, lineCount, readContent, files, targetId, target, selectTarget, preferences, setPreference,
   visible, execution, issueCount, showIssues,
+  mode, setMode, analysis, staleAnalysis, goToAnalysisRange,
 }) {
-  const [mode, setMode] = useState('file');
   return (
     <aside className="workspace-inspector" id="workspace-inspector" aria-label="Inspector" hidden={!visible}>
       <div className="workspace-bar"><h2>Inspector</h2></div>
       <div className="inspector-modes" role="group" aria-label="Inspector view">
         <button type="button" aria-pressed={mode === 'file'} onClick={() => setMode('file')}>File</button>
         <button type="button" aria-pressed={mode === 'build'} onClick={() => setMode('build')}>Build</button>
+        <button type="button" aria-pressed={mode === 'analysis'} onClick={() => setMode('analysis')}>Analysis</button>
       </div>
       <div className="inspector-body">
-        {mode === 'file' ? (
+        {mode === 'analysis' ? <AnalysisInspector state={analysis} stale={staleAnalysis} navigate={goToAnalysisRange} /> : (
           <>
-            <h3 className="inspector-heading">File details</h3>
-            <FileDetails file={file} lineCount={lineCount} readContent={readContent} />
+            {mode === 'file' ? (
+              <>
+                <h3 className="inspector-heading">File details</h3>
+                <FileDetails file={file} lineCount={lineCount} readContent={readContent} />
+              </>
+            ) : <BuildDetails target={target} execution={execution} issueCount={issueCount} showIssues={showIssues} />}
+            <div className="editor-preferences target-control">
+              <label>
+                Execution target
+                <select value={targetId ?? ''} onChange={(event) => selectTarget(Number(event.target.value) || null)}>
+                  <option value="">None selected</option>
+                  {files.filter(executionTarget).map((target) => <option key={target.id} value={target.id}>{target.path}</option>)}
+                </select>
+              </label>
+            </div>
           </>
-        ) : <BuildDetails target={target} execution={execution} issueCount={issueCount} showIssues={showIssues} />}
-        <div className="editor-preferences target-control">
-          <label>
-            Execution target
-            <select value={targetId ?? ''} onChange={(event) => selectTarget(Number(event.target.value) || null)}>
-              <option value="">None selected</option>
-              {files.filter(executionTarget).map((target) => <option key={target.id} value={target.id}>{target.path}</option>)}
-            </select>
-          </label>
-        </div>
+        )}
         {mode === 'file' && (
           <>
             <h3 className="inspector-heading">Editor preferences</h3>

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { PanelBottom, PanelLeft, PanelRight, Play, SlidersHorizontal, Square } from 'lucide-react';
+import { PanelBottom, PanelLeft, PanelRight, Play, ScanLine, SlidersHorizontal, Square } from 'lucide-react';
 
 import { Brand } from '../components/Brand.jsx';
 import { Button } from '../components/controls.jsx';
@@ -79,6 +79,7 @@ function LayoutMenu({ showPreview, toggleView, resetLayout }) {
 export function WorkspaceToolbar({
   theme, changeTheme, layout, togglePanel, showPreview, toggleView, resetLayout,
   target, execution, runTarget,
+  canAnalyze, analyzeActiveFile, analysisStatus,
 }) {
   const ViewTitle = showPreview ? 'span' : 'h1';
 
@@ -89,12 +90,17 @@ export function WorkspaceToolbar({
         <ViewTitle className="workspace-name">{showPreview ? 'Design system' : 'Workspace'}</ViewTitle>
       </div>
       {(!showPreview || execution.active) && (
-        <div className="execution-toolbar" aria-label="Execution">
+        <div className="execution-toolbar" aria-label="Source actions">
           <Button icon={Play} aria-label="Run" title={target ? 'Run ' + target.entry_file : 'Select an execution target'}
             aria-keyshortcuts="Control+Enter Meta+Enter" disabled={showPreview || !target || execution.active} onClick={runTarget} />
           <Button icon={Square} aria-label="Stop" title="Stop execution"
             aria-keyshortcuts="Control+Shift+Enter Meta+Shift+Enter"
             disabled={!execution.active || execution.run.state === 'CANCELLING'} onClick={execution.stop} />
+          {!showPreview && (
+            <Button icon={ScanLine} aria-label="Analyze" title={analysisStatus === 'running' ? 'Analyzing C source'
+              : canAnalyze ? 'Analyze the active C file' : 'Open a C file to analyze it'}
+              disabled={!canAnalyze} onClick={analyzeActiveFile}>Analyze</Button>
+          )}
           <span
             className="execution-status" role="status" aria-label="Execution status"
             data-state={execution.failed ? 'failed' : execution.active ? 'active' : 'idle'}

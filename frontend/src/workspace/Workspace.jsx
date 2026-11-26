@@ -1,5 +1,7 @@
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
 
+import { analysisMarkers, sourceRanges } from '../analysis/sourceRanges.js';
+import { useAnalysis } from '../analysis/useAnalysis.js';
 import { DebugPanel } from '../execution/DebugPanel.jsx';
 import { makeExecutionPayload } from '../execution/payload.js';
 import { useExecution } from '../execution/useExecution.js';
@@ -14,7 +16,7 @@ import { clampSize, panelOptions } from './panelLayout.js';
 import { currentIssues, issueMarkers, readBuildIssues } from './sourceLocations.js';
 import { useWorkspaceProject } from './useWorkspaceProject.js';
 import {
-  addEntries, basename, closeTab, createProject, deleteEntry, executionTarget,
+  addEntries, basename, closeTab, createProject, deleteEntry, executionTarget, fileMode,
   joinPath, openFile, parentPath, ProjectFileError, readUploads, renameEntry, templateContent,
 } from './projectFiles.js';
 
@@ -30,6 +32,7 @@ export function Workspace({ hidden, layout, onResize, showPanel, theme, toolbar,
   } = useWorkspaceProject();
   const [modeRequest, setModeRequest] = useState(null);
   const [location, setLocation] = useState(null);
+  const [inspectorMode, setInspectorMode] = useState('file');
   const [buildSources, setBuildSources] = useState(new Map());
   const [reveal, setReveal] = useState(null);
   const [dialog, setDialog] = useState(null);
@@ -41,6 +44,13 @@ export function Workspace({ hidden, layout, onResize, showPanel, theme, toolbar,
   const activeFile = files.find((file) => file.id === project.activeId);
   const target = executionTarget(files.find((file) => file.id === project.targetId));
   const execution = useExecution();
+  const analysis = useAnalysis();
+  const snapshot = analysis.state?.snapshot;
+  const analyzedFile = snapshot && files.find(({ id }) => id === snapshot.id);
+  const staleAnalysis = Boolean(snapshot && (analyzedFile?.path !== snapshot.path || readContent(analyzedFile) !== snapshot.content));
+  const locateAnalysisRange = useMemo(() => snapshot && sourceRanges(snapshot.content), [snapshot]);
+  const report = analysis.state?.report;
+  const canAnalyze = !loading && activeFile && fileMode(activeFile.path) === 'c' && analysis.state?.status !== 'running';
   const rawIssues = useMemo(() => readBuildIssues(execution.run.log, buildSources), [execution.run.log, buildSources]);
   const issues = useMemo(
     () => currentIssues(rawIssues, buildSources, files, readContent),
@@ -51,8 +61,12 @@ export function Workspace({ hidden, layout, onResize, showPanel, theme, toolbar,
     for (const [path, annotations] of Object.entries(issueMarkers(issues))) {
       merged[path] = [...(markersByFile[path] ?? []), ...annotations];
     }
+    if (report && !staleAnalysis) {
+      const path = snapshot.path;
+      merged[path] = [...(merged[path] ?? []), ...analysisMarkers(report, locateAnalysisRange)];
+    }
     return merged;
-  }, [issues, markersByFile]);
+  }, [issues, markersByFile, report, staleAnalysis, snapshot, locateAnalysisRange]);
 
   function selectFile(id) {
     updateProject((state) => openFile(state, id));
@@ -71,6 +85,19 @@ export function Workspace({ hidden, layout, onResize, showPanel, theme, toolbar,
   function goToLocation(request) {
     selectFile(request.id);
     setLocation({ ...request });
+  }
+
+  function goToAnalysisRange(range) {
+    if (!snapshot || staleAnalysis) return;
+    const position = locateAnalysisRange(range);
+    if (position) goToLocation({ id: snapshot.id, ...position });
+  }
+
+  function analyzeActiveFile() {
+    if (!canAnalyze) return;
+    showPanel('inspector');
+    setInspectorMode('analysis');
+    void analysis.start(activeFile, readContent(activeFile));
   }
 
   function runTarget() {
@@ -207,6 +234,7 @@ export function Workspace({ hidden, layout, onResize, showPanel, theme, toolbar,
       <WorkspaceToolbar
         {...toolbar} theme={theme} layout={layout} showPreview={hidden}
         target={loading ? null : target} execution={execution} runTarget={runTarget}
+        canAnalyze={Boolean(canAnalyze)} analyzeActiveFile={analyzeActiveFile} analysisStatus={analysis.state?.status}
       />
       {storageIssue && !hidden && <p className="workspace-save-alert" role="alert">{storageIssue}</p>}
       {loading ? (
@@ -237,6 +265,8 @@ export function Workspace({ hidden, layout, onResize, showPanel, theme, toolbar,
             preferences={preferences} visible={layout.inspector.visible}
             setPreference={(key, value) => setPreferences((previous) => ({ ...previous, [key]: value }))}
             target={target} execution={execution} issueCount={issues.length} showIssues={() => showNavigatorMode('issues')}
+            mode={inspectorMode} setMode={setInspectorMode} analysis={analysis.state}
+            staleAnalysis={staleAnalysis} goToAnalysisRange={goToAnalysisRange}
           />
           <input
             ref={uploadInput} type="file" multiple hidden aria-label="Upload source files"

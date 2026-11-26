@@ -419,6 +419,10 @@
   font-size: 0.875rem;
 }
 
+.inspector-modes {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .navigator-selector button:hover,
 .inspector-modes button:hover,
 .navigator-file:hover {
@@ -429,6 +433,129 @@
 .inspector-modes button[aria-pressed="true"] {
   border-color: var(--border-control);
   background: var(--surface-selection-inactive);
+}
+
+.analysis-inspector {
+  min-width: 0;
+  padding: var(--space-2);
+}
+
+.analysis-file,
+.analysis-note,
+.analysis-ir-section h3 {
+  padding: var(--space-2);
+  overflow-wrap: anywhere;
+  font-size: 0.8125rem;
+}
+
+.analysis-file,
+.analysis-ir-section h3 {
+  font-weight: 600;
+}
+
+.analysis-note,
+.analysis-location small,
+.analysis-line,
+.analysis-pages {
+  color: var(--text-secondary);
+}
+
+.analysis-stale {
+  color: var(--signal-warning);
+}
+
+.analysis-error,
+.analysis-diagnostic small {
+  color: var(--signal-error);
+}
+
+.analysis-views,
+.analysis-pages {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  align-items: center;
+  padding: var(--space-1);
+  font-size: 0.75rem;
+}
+
+.analysis-views button,
+.analysis-pages button,
+.analysis-expand {
+  min-height: 1.75rem;
+  padding-inline: var(--space-2);
+  border: 1px solid transparent;
+  border-radius: var(--control-radius);
+  cursor: pointer;
+}
+
+.analysis-views button[aria-pressed="true"] {
+  border-color: var(--border-control);
+  background: var(--surface-selection-inactive);
+}
+
+.analysis-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.analysis-branch > .analysis-list {
+  margin-inline-start: 0.42rem;
+  padding-inline-start: 0.34rem;
+  border-inline-start: 1px solid var(--border-subtle);
+}
+
+.analysis-location {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--control-radius);
+  overflow-wrap: anywhere;
+  text-align: start;
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+
+.analysis-location code {
+  white-space: pre-wrap;
+}
+
+.analysis-location small {
+  display: block;
+  font-size: 0.7rem;
+}
+
+.analysis-line {
+  flex: none;
+  font: 0.7rem var(--code-font);
+}
+
+.analysis-node {
+  display: flex;
+  align-items: flex-start;
+}
+
+.analysis-expand {
+  flex: none;
+  padding-inline: 0.15rem;
+}
+
+.analysis-inspector button:hover:enabled {
+  background: var(--surface-hover);
+}
+
+.analysis-inspector button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.analysis-inspector button:disabled {
+  cursor: default;
 }
 
 .navigator-caption,

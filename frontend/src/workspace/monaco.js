@@ -109,10 +109,10 @@ export function createSourceEditor(host, scope, onLineCount, onFileEdited) {
       }
       instance.focus();
     },
-    goToLocation({ id, line, column, length = 1 }) {
+    goToLocation({ id, line, column, length = 1, endLine = line, endColumn = column + length }) {
       if (id !== activeId) return;
       const range = instance.getModel().validateRange({
-        startLineNumber: line, endLineNumber: line, startColumn: column, endColumn: column + length,
+        startLineNumber: line, endLineNumber: endLine, startColumn: column, endColumn,
       });
       instance.setSelection(range);
       instance.revealRangeInCenter(range);
