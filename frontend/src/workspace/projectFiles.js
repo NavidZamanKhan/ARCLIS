@@ -33,7 +33,7 @@ export function joinPath(parent, name) {
   return parent ? parent + '/' + name : name;
 }
 
-function extension(path) {
+export function extension(path) {
   return basename(path).split('.').slice(1).at(-1) ?? '';
 }
 
