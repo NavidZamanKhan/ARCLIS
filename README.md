@@ -456,8 +456,9 @@ Default per-job limits are one CPU, 256 MiB RAM with zero swap, 64 processes,
 32 MiB of scratch space, 256 KiB of combined output, and 15 seconds for
 compilation, execution, and output capture. The worker reports that elapsed interval, in
 milliseconds. Workspace preparation and Docker cleanup are outside that
-interval. A local operator should investigate any reported cleanup
-failure using the job ID and the container label `org.arclis.worker=local`.
+interval. The worker retries unconfirmed container removal once. If cleanup
+still fails, it returns an internal error and logs the job ID. Local operators
+can use the job ID and the label `org.arclis.worker=local` to investigate.
 
 After loading the development environment as above, run the Docker integration
 tests with:
@@ -553,3 +554,51 @@ bounds compile time, total interactive time (120 seconds), runtime inactivity
 (30 seconds), output, and input (4 KiB per message, 64 KiB per job). The
 server admits up to eight unclaimed sessions and two active jobs. Disconnect
 and cancellation stop the job and trigger container and workspace cleanup.
+
+### S22 worker audit
+
+On Ubuntu 24.04 under WSL 2 with rootless Docker 29.10.1 and systemd cgroup
+v2, trusted fixtures verified CPU throttling, memory and swap limits,
+process creation limits, combined output limits, timeouts, and cleanup. The
+fixtures also confirmed loopback-only container networking, read-only root and
+source mounts, bounded scratch space, non-root execution, seccomp, and the
+absence of the Docker socket and a synthetic host environment marker.
+[Rootless cgroup requirements](https://docs.docker.com/engine/security/rootless/tips/#limiting-resources)
+
+The backend and browser regressions cover one-time session ownership, origin and
+loopback checks, invalid paths and workspace collisions, bounded request and
+input handling, cancellation, and disconnect cleanup. With Django debug mode
+off and both local opt-ins set, capabilities reported both features disabled,
+execution and analysis POSTs returned 404, and an execution WebSocket handshake
+was rejected. Health remained available.
+
+Public code execution remains disabled. The verified rootless containers
+share the worker host's Linux kernel, and the session capacity limits apply
+to a single process. The public deployment gate requires evaluating stronger
+isolation such as gVisor or microVMs on dedicated worker infrastructure,
+with resource and admission quotas, monitoring, and cleanup verification on
+that infrastructure. [gVisor security model](https://gvisor.dev/docs/architecture_guide/security/)
+
+The deployment profile needs HTTPS and WSS, an explicit host and origin
+policy, and an upstream request-body limit because Django's ASGI handler can
+buffer the body before the endpoint parser runs. Django's deployment check on
+the local settings reported clickjacking, CSRF, HSTS, and HTTPS redirect
+warnings. Review the applicable controls at the production application and
+proxy before exposing the service. [Django deployment checklist](https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/)
+
+#### Local execution timings
+
+On the same host, each toolchain ran a trusted program that printed `42`.
+The benchmark ran one warm-up job and five sequential measured jobs per
+toolchain with prebuilt images. Wall time spans the prepared job's `run()`
+call through workspace cleanup. Attach time is the worker-reported interval
+for container start, compilation, execution, and output capture. The final
+column is the median of the paired differences and includes staging, Docker
+control calls, and cleanup. All times are in milliseconds.
+
+| Language | Median wall | Wall range | Median attach | Median wall minus attach |
+| --- | ---: | ---: | ---: | ---: |
+| C | 492 | 467–578 | 285 | 204 |
+| C++ | 735 | 693–770 | 535 | 191 |
+| Java | 1727 | 1627–2219 | 1529 | 207 |
+| Python | 494 | 487–523 | 288 | 201 |
