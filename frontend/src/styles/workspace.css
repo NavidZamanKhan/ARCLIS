@@ -173,9 +173,22 @@
 }
 
 .workspace-layout[hidden],
+.workspace-loading[hidden],
 .workspace-layout [hidden],
 .layout-options[hidden] {
   display: none;
+}
+
+.workspace-loading,
+.workspace-save-alert {
+  padding: var(--space-2) var(--space-4);
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}
+
+.workspace-save-alert {
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--signal-error);
 }
 
 .workspace-navigator,

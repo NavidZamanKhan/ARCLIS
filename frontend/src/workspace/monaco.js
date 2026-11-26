@@ -78,7 +78,7 @@ export function createSourceEditor(host, scope, onLineCount, onFileEdited) {
   const contentListener = instance.onDidChangeModelContent(() => {
     const { model, initialVersion } = models.get(activeId);
     onLineCount(model.getLineCount());
-    onFileEdited(activeId, model.getAlternativeVersionId() !== initialVersion);
+    onFileEdited(activeId, model.getAlternativeVersionId() !== initialVersion, model.getValue(undefined, true));
   });
 
   return {

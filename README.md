@@ -18,8 +18,11 @@ C++, Java, and Python samples. Use the project’s plus button or an item's
 context menu to create, rename, delete, upload, or download files. Open a file
 by clicking its name, or use the jump bar to switch files and locate their
 folders. Monaco keeps edits and cursor positions through tab switches,
-renames, and reopening closed tabs. Workspace files are held in memory until
-the page reloads. Download a file to keep a copy of its current contents.
+renames, and reopening closed tabs. The browser saves workspace files,
+open tabs, and the selected execution target in IndexedDB. Panel layout,
+theme, and editor preferences are saved locally. Use **Reset Workspace** in
+the project menu to restore the original samples after confirmation.
+Download a file to keep a separate copy of its current contents.
 
 Choose a source entry file under **Execution target** in the inspector.
 Targets identify one toolchain and its entry file. Java uses the class name

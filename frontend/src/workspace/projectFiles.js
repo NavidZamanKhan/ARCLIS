@@ -89,11 +89,40 @@ function validateEntries(entries) {
   }
 }
 
-export function createProject() {
+export function createProject(firstId = 1) {
   const entries = Object.entries(samples).map(([language, sample], index) => ({
-    id: index + 1, kind: 'file', path: sample.filename, content: sourceText(sample.lines), symbols: sampleSymbols[language],
+    id: firstId + index, kind: 'file', path: sample.filename, content: sourceText(sample.lines), symbols: sampleSymbols[language],
   }));
-  return { entries, nextId: entries.length + 1, tabs: [1], activeId: 1, targetId: 1 };
+  return { entries, nextId: firstId + entries.length, tabs: [firstId], activeId: firstId, targetId: firstId };
+}
+
+export function restoreProject(saved) {
+  if (!Array.isArray(saved?.entries) || !Array.isArray(saved.tabs)) {
+    throw new ProjectFileError('The saved workspace has an invalid format.');
+  }
+  const ids = new Set();
+  const files = new Map();
+  const entries = saved.entries.map(({ id, kind, path, content, symbols } = {}) => {
+    if (!Number.isSafeInteger(id) || id < 1 || id > Number.MAX_SAFE_INTEGER - 100 || ids.has(id)
+      || typeof path !== 'string' || (kind !== 'file' && kind !== 'folder')
+      || (kind === 'file' && typeof content !== 'string')) {
+      throw new ProjectFileError('The saved workspace has invalid file metadata.');
+    }
+    ids.add(id);
+    if (kind === 'folder') return { id, kind, path };
+    const entry = { id, kind, path, content };
+    if (Array.isArray(symbols) && symbols.every((symbol) => typeof symbol === 'string')) entry.symbols = symbols;
+    files.set(id, entry);
+    return entry;
+  });
+  validateEntries(entries);
+  const tabs = [...new Set(saved.tabs.filter((id) => files.has(id)))];
+  const nextAvailable = entries.reduce((next, entry) => Math.max(next, entry.id + 1), 1);
+  const nextId = Number.isSafeInteger(saved.nextId) && saved.nextId <= Number.MAX_SAFE_INTEGER - 100
+    ? Math.max(nextAvailable, saved.nextId) : nextAvailable;
+  const activeId = tabs.includes(saved.activeId) ? saved.activeId : tabs[0] ?? null;
+  const targetId = executionTarget(files.get(saved.targetId)) ? saved.targetId : null;
+  return { entries, nextId, tabs, activeId, targetId };
 }
 
 export function openFile(project, id) {

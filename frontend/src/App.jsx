@@ -1,19 +1,21 @@
-import { useLayoutEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useState } from 'react';
 
 import { ComponentPreview } from './preview/ComponentPreview.jsx';
 import { readTheme, saveTheme } from './theme/preferences.js';
 import { Workspace } from './workspace/Workspace.jsx';
-import { defaultLayout } from './workspace/panelLayout.js';
+import { defaultLayout, readLayout, saveLayout } from './workspace/panelLayout.js';
 
 export default function App() {
   const [theme, setTheme] = useState(readTheme);
   const [showPreview, setShowPreview] = useState(false);
-  const [layout, setLayout] = useState(defaultLayout);
+  const [layout, setLayout] = useState(readLayout);
 
   useLayoutEffect(() => {
     document.documentElement.dataset.theme = theme;
     saveTheme(theme);
   }, [theme]);
+
+  useEffect(() => { saveLayout(layout); }, [layout]);
 
   function togglePanel(panel) {
     setLayout((previous) => ({

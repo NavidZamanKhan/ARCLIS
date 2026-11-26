@@ -9,6 +9,7 @@ function FileMenu({ menu, close, choose }) {
   const actions = [
     ...(isFolder ? [['new-file', 'New File'], ['new-folder', 'New Folder'], ['upload', 'Upload Files']] : [['download', 'Download']]),
     ...(menu.item ? [['rename', 'Rename'], ['delete', 'Delete']] : []),
+    ...(!menu.item ? [['reset', 'Reset Workspace']] : []),
   ];
 
   useEffect(() => {

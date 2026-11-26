@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { DebugPanel } from '../execution/DebugPanel.jsx';
 import { makeExecutionPayload } from '../execution/payload.js';
@@ -10,6 +10,7 @@ import { Splitter } from './Splitter.jsx';
 import { WorkspaceToolbar } from './WorkspaceToolbar.jsx';
 import { readEditorPreferences, saveEditorPreferences, tabSizes } from './editorPreferences.js';
 import { clampSize, panelOptions } from './panelLayout.js';
+import { useWorkspaceProject } from './useWorkspaceProject.js';
 import {
   addEntries, basename, closeTab, createProject, deleteEntry, executionTarget, fileMode,
   joinPath, languages, openFile, parentPath, ProjectFileError, readUploads, renameEntry, templateContent,
@@ -65,9 +66,9 @@ export function Workspace({ hidden, layout, onResize, showPanel, theme, toolbar,
   const editor = useRef(null);
   const uploadInput = useRef(null);
   const uploadFolder = useRef(null);
-  const [project, setProject] = useState(createProject);
-  const currentProject = useRef(project);
-  const [modified, setModified] = useState(new Set());
+  const {
+    project, currentProject, modified, markFile, readContent, updateProject, storageIssue, loading,
+  } = useWorkspaceProject();
   const [reveal, setReveal] = useState(null);
   const [dialog, setDialog] = useState(null);
   const [feedback, setFeedback] = useState(null);
@@ -78,23 +79,6 @@ export function Workspace({ hidden, layout, onResize, showPanel, theme, toolbar,
   const activeFile = files.find((file) => file.id === project.activeId);
   const target = executionTarget(files.find((file) => file.id === project.targetId));
   const execution = useExecution();
-
-  const markFile = useCallback((id, dirty) => {
-    setModified((previous) => {
-      if (previous.has(id) === dirty) return previous;
-      const next = new Set(previous);
-      if (dirty) next.add(id);
-      else next.delete(id);
-      return next;
-    });
-  }, []);
-
-  function updateProject(change) {
-    const next = change(currentProject.current);
-    currentProject.current = next;
-    setProject(next);
-    return next;
-  }
 
   function selectFile(id) {
     updateProject((state) => openFile(state, id));
@@ -124,7 +108,7 @@ export function Workspace({ hidden, layout, onResize, showPanel, theme, toolbar,
       uploadFolder.current = item?.id ?? null;
       uploadInput.current.click();
     } else if (type === 'download') {
-      const content = editor.current?.getContent(item.id) ?? item.content;
+      const content = readContent(item);
       const url = URL.createObjectURL(new Blob([content], { type: 'text/plain;charset=utf-8' }));
       const download = document.createElement('a');
       download.href = url;
@@ -163,9 +147,11 @@ export function Workspace({ hidden, layout, onResize, showPanel, theme, toolbar,
     if (type === 'rename') {
       updateProject((state) => renameEntry(state, item.id, name));
     } else if (type === 'delete') {
-      const next = updateProject((state) => deleteEntry(state, item.id));
-      setModified((previous) => new Set(next.entries.filter(({ id }) => previous.has(id)).map(({ id }) => id)));
+      updateProject((state) => deleteEntry(state, item.id));
       setReveal({ path: parentPath(item.path) });
+    } else if (type === 'reset') {
+      updateProject((state) => createProject(state.nextId));
+      setReveal({ path: '' });
     } else {
       updateProject((state) => {
         const path = joinPath(item?.path ?? '', name);
@@ -181,13 +167,13 @@ export function Workspace({ hidden, layout, onResize, showPanel, theme, toolbar,
   useEffect(() => { saveEditorPreferences(preferences); }, [preferences]);
 
   useEffect(() => {
-    if (hidden || typeof ResizeObserver === 'undefined') return undefined;
+    if (hidden || loading || typeof ResizeObserver === 'undefined') return undefined;
     const observer = new ResizeObserver(([{ contentRect: { width, height } }]) => {
       if (width > 0 && height > 0) setExtent({ width, height });
     });
     observer.observe(viewport.current);
     return () => observer.disconnect();
-  }, [hidden]);
+  }, [hidden, loading]);
 
   const dimensions = Object.fromEntries(Object.entries(panelOptions).map(([panel, options]) => {
     const available = panel === 'debug' ? extent.height * 0.55 : extent.width * 0.31;
@@ -209,43 +195,48 @@ export function Workspace({ hidden, layout, onResize, showPanel, theme, toolbar,
     <>
       <WorkspaceToolbar
         {...toolbar} theme={theme} layout={layout} showPreview={hidden}
-        target={target} execution={execution} runTarget={runTarget}
+        target={loading ? null : target} execution={execution} runTarget={runTarget}
       />
-      <main className="workspace-layout" aria-label="Workspace" ref={viewport} hidden={hidden} style={tracks}>
-        <ProjectNavigator
-          project={project} activeFile={activeFile} openFile={selectFile} visible={layout.navigator.visible}
-          goToSymbol={(symbol) => editor.current?.goToSymbol(symbol)} choose={choose} reveal={reveal} feedback={feedback}
-        />
-        {splitter('navigator')}
-        <div className="workspace-center">
-          <SourceEditor
-            ref={editor} files={files} activeFile={activeFile} tabs={project.tabs} modified={modified}
-            openFile={selectFile} closeTab={(id) => updateProject((state) => closeTab(state, id))}
-            revealFolder={revealFolder} theme={theme} hidden={hidden} preferences={preferences}
-            markersByFile={markersByFile} onLineCount={setLineCount} onFileEdited={markFile}
+      {storageIssue && !hidden && <p className="workspace-save-alert" role="alert">{storageIssue}</p>}
+      {loading ? (
+        <main className="workspace-loading" aria-label="Workspace" hidden={hidden}>Loading workspace…</main>
+      ) : (
+        <main className="workspace-layout" aria-label="Workspace" ref={viewport} hidden={hidden} style={tracks}>
+          <ProjectNavigator
+            project={project} activeFile={activeFile} openFile={selectFile} visible={layout.navigator.visible}
+            goToSymbol={(symbol) => editor.current?.goToSymbol(symbol)} choose={choose} reveal={reveal} feedback={feedback}
           />
-          {splitter('debug')}
-          <DebugPanel visible={layout.debug.visible} execution={execution} theme={theme} workspaceHidden={hidden} />
-        </div>
-        {splitter('inspector')}
-        <Inspector
-          file={activeFile} lineCount={lineCount} files={files} targetId={project.targetId}
-          selectTarget={(targetId) => updateProject((state) => ({ ...state, targetId }))}
-          preferences={preferences} visible={layout.inspector.visible}
-          setPreference={(key, value) => setPreferences((previous) => ({ ...previous, [key]: value }))}
-        />
-        <input
-          ref={uploadInput} type="file" multiple hidden aria-label="Upload source files"
-          accept=".c,.cc,.cpp,.cxx,.h,.hh,.hpp,.hxx,.java,.py" onChange={handleUpload}
-        />
-        {dialog && (
-          <ProjectDialog
-            action={dialog} submit={applyFileAction} close={() => setDialog(null)}
-            occupied={new Set(project.entries.filter(({ path }) => parentPath(path) === (dialog.item?.path ?? ''))
-              .map(({ path }) => basename(path)))}
+          {splitter('navigator')}
+          <div className="workspace-center">
+            <SourceEditor
+              ref={editor} files={files} activeFile={activeFile} tabs={project.tabs} modified={modified}
+              openFile={selectFile} closeTab={(id) => updateProject((state) => closeTab(state, id))}
+              revealFolder={revealFolder} theme={theme} hidden={hidden} preferences={preferences}
+              markersByFile={markersByFile} onLineCount={setLineCount} onFileEdited={markFile}
+            />
+            {splitter('debug')}
+            <DebugPanel visible={layout.debug.visible} execution={execution} theme={theme} workspaceHidden={hidden} />
+          </div>
+          {splitter('inspector')}
+          <Inspector
+            file={activeFile} lineCount={lineCount} files={files} targetId={project.targetId}
+            selectTarget={(targetId) => updateProject((state) => ({ ...state, targetId }))}
+            preferences={preferences} visible={layout.inspector.visible}
+            setPreference={(key, value) => setPreferences((previous) => ({ ...previous, [key]: value }))}
           />
-        )}
-      </main>
+          <input
+            ref={uploadInput} type="file" multiple hidden aria-label="Upload source files"
+            accept=".c,.cc,.cpp,.cxx,.h,.hh,.hpp,.hxx,.java,.py" onChange={handleUpload}
+          />
+          {dialog && (
+            <ProjectDialog
+              action={dialog} submit={applyFileAction} close={() => setDialog(null)}
+              occupied={new Set(project.entries.filter(({ path }) => parentPath(path) === (dialog.item?.path ?? ''))
+                .map(({ path }) => basename(path)))}
+            />
+          )}
+        </main>
+      )}
     </>
   );
 }

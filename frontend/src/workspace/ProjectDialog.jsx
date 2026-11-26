@@ -3,7 +3,9 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { Button } from '../components/controls.jsx';
 import { basename, ProjectFileError, templates } from './projectFiles.js';
 
-const labels = { 'new-file': 'New File', 'new-folder': 'New Folder', rename: 'Rename', delete: 'Delete' };
+const labels = {
+  'new-file': 'New File', 'new-folder': 'New Folder', rename: 'Rename', delete: 'Delete', reset: 'Reset Workspace',
+};
 
 function availableName(filename, occupied) {
   const dot = filename.lastIndexOf('.');
@@ -20,7 +22,7 @@ export function ProjectDialog({ action, occupied, submit, close }) {
   const [template, setTemplate] = useState('');
   const [suggestedName, setSuggestedName] = useState('');
   const [error, setError] = useState('');
-  const deleting = action.type === 'delete';
+  const destructive = action.type === 'delete' || action.type === 'reset';
   const title = labels[action.type];
 
   useEffect(() => {
@@ -51,8 +53,10 @@ export function ProjectDialog({ action, occupied, submit, close }) {
     >
       <form onSubmit={handleSubmit}>
         <h2 id={titleId}>{title}</h2>
-        {deleting ? (
-          <p>Delete <strong>{action.item.path}</strong>{action.item.kind === 'folder' ? ' and its contents' : ''}?</p>
+        {destructive ? (
+          action.type === 'reset'
+            ? <p>Replace the current workspace files and tabs with the original samples?</p>
+            : <p>Delete <strong>{action.item.path}</strong>{action.item.kind === 'folder' ? ' and its contents' : ''}?</p>
         ) : (
           <>
             {action.type === 'new-file' && (
@@ -83,8 +87,8 @@ export function ProjectDialog({ action, occupied, submit, close }) {
         )}
         {error && <p id={errorId} className="project-error" role="alert">{error}</p>}
         <div className="layout-dialog-actions">
-          <Button type="button" data-initial-focus={deleting || undefined} onClick={dismiss}>Cancel</Button>
-          <Button type="submit" variant={deleting ? 'danger' : 'primary'}>
+          <Button type="button" data-initial-focus={destructive || undefined} onClick={dismiss}>Cancel</Button>
+          <Button type="submit" variant={destructive ? 'danger' : 'primary'}>
             {action.type.startsWith('new-') ? 'Create' : title}
           </Button>
         </div>

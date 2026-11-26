@@ -2,13 +2,26 @@ import { describe, expect, it } from 'vitest';
 
 import {
   addEntries, closeTab, createProject, deleteEntry, executionTarget, joinPath,
-  openFile, readUploads, renameEntry, templateContent,
+  openFile, readUploads, renameEntry, restoreProject, templateContent,
 } from './projectFiles.js';
 
 const folder = (path) => ({ kind: 'folder', path });
 const file = (path, content = '') => ({ kind: 'file', path, content });
 
 describe('project file operations', () => {
+  it('restores only valid tab and target references while preserving current text', () => {
+    const project = addEntries(createProject(), [folder('src'), file('src/module.py', '\uFEFFprint(2)\r\n')]);
+    const restored = restoreProject({
+      ...project, tabs: [project.activeId, project.activeId, 900], activeId: 900, targetId: 900, nextId: 1,
+    });
+    expect(restored.tabs).toEqual([project.activeId]);
+    expect(restored.activeId).toBe(project.activeId);
+    expect(restored.targetId).toBeNull();
+    expect(restored.nextId).toBe(project.nextId);
+    expect(restored.entries.at(-1).content).toBe('\uFEFFprint(2)\r\n');
+    expect(() => restoreProject({ ...project, entries: [...project.entries, project.entries[0]] })).toThrow('metadata');
+  });
+
   it('preserves file IDs, source, tabs and target when renaming a folder', () => {
     let project = addEntries(createProject(), [folder('pkg'), file('pkg/Runner.java', 'class Runner {}')]);
     const id = project.activeId;
