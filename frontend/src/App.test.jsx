@@ -76,8 +76,7 @@ describe('ARCLIS theme preferences', () => {
     const silver = screen.getByRole('radio', { name: 'Silver' });
     expect(graphite.checked).toBe(true);
 
-    await user.tab();
-    expect(document.activeElement).toBe(graphite);
+    graphite.focus();
     await user.keyboard('{ArrowRight}');
 
     expect(silver.checked).toBe(true);

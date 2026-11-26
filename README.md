@@ -23,9 +23,21 @@ the page reloads. Download a file to keep a copy of its current contents.
 
 Choose a source entry file under **Execution target** in the inspector.
 Targets identify one toolchain and its entry file. Java uses the class name
-derived from the package and filename. Execution is connected in a later stage.
+derived from the package and filename. C and C++ targets compile sources in
+the entry file's folder and can include compatible headers from the workspace.
+Keep separate native programs in separate folders. Java and Python submissions
+include files of the selected language throughout the workspace.
 Uploads accept UTF-8 source files with supported extensions and safe relative
 paths, with a 1 MiB per-upload batch limit and up to 50 project source files.
+
+Start the loopback backend as described in [Interactive sessions](#interactive-sessions-on-loopback),
+then use **Run** on the workspace toolbar. The browser submits the current
+editor contents to `http://127.0.0.1:8000`. In **Console**, wait for the program's
+prompt and submit a line with Enter or **Send**. Use **Send EOF** to finish
+standard input and **Stop** to request cancellation. **Build log** shows
+compiler messages, and **Execution details** shows the target, result, exit
+code when available, and duration. The console displays program-supplied
+control sequences as text.
 
 Switch the navigator to Symbols to jump to a sample declaration. The editor header opens Find,
 Replace, and Go to line. Use Ctrl+M to toggle whether Tab indents or moves

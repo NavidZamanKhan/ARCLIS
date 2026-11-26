@@ -3,7 +3,6 @@ import { useLayoutEffect, useState } from 'react';
 import { ComponentPreview } from './preview/ComponentPreview.jsx';
 import { readTheme, saveTheme } from './theme/preferences.js';
 import { Workspace } from './workspace/Workspace.jsx';
-import { WorkspaceToolbar } from './workspace/WorkspaceToolbar.jsx';
 import { defaultLayout } from './workspace/panelLayout.js';
 
 export default function App() {
@@ -26,22 +25,22 @@ export default function App() {
     setLayout((previous) => ({ ...previous, [panel]: { ...previous[panel], size } }));
   }
 
-  function showNavigator() {
-    setLayout((previous) => previous.navigator.visible ? previous : ({
-      ...previous, navigator: { ...previous.navigator, visible: true },
+  function showPanel(panel) {
+    setLayout((previous) => previous[panel].visible ? previous : ({
+      ...previous, [panel]: { ...previous[panel], visible: true },
     }));
   }
 
   return (
     <div className="app-frame min-h-svh bg-workspace">
-      <WorkspaceToolbar
-        theme={theme} changeTheme={setTheme} layout={layout} togglePanel={togglePanel}
-        showPreview={showPreview} toggleView={() => setShowPreview(!showPreview)}
-        resetLayout={() => setLayout(defaultLayout())}
-      />
       <Workspace
         hidden={showPreview} layout={layout} onResize={resizePanel} theme={theme}
-        showNavigator={showNavigator}
+        showPanel={showPanel}
+        toolbar={{
+          changeTheme: setTheme, togglePanel,
+          toggleView: () => setShowPreview(!showPreview),
+          resetLayout: () => setLayout(defaultLayout()),
+        }}
       />
       {showPreview && (
         <main className="preview">

@@ -57,6 +57,37 @@
   color: var(--text-secondary);
 }
 
+.execution-toolbar {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.execution-toolbar .ui-button {
+  min-width: var(--control-height);
+  padding-inline: var(--space-2);
+}
+
+.execution-toolbar button[aria-label="Run"]:enabled {
+  color: var(--accent);
+}
+
+.execution-status {
+  padding-inline: var(--space-2);
+  color: var(--text-secondary);
+  font-size: 0.8125rem;
+  white-space: nowrap;
+}
+
+.execution-status[data-state="active"] {
+  color: var(--accent);
+}
+
+.execution-status[data-state="failed"] {
+  color: var(--signal-error);
+}
+
 .layout-menu {
   position: relative;
 }
@@ -587,7 +618,10 @@
 }
 
 .workspace-debug {
+  display: flex;
   grid-row: 3;
+  flex-direction: column;
+  overflow: auto;
   background: var(--surface-console);
 }
 
@@ -641,13 +675,153 @@
 }
 
 .debug-bar {
+  flex-wrap: wrap;
+  justify-content: space-between;
   background: var(--surface-tab);
 }
 
-.debug-empty {
-  padding: var(--space-4);
+.debug-title,
+.debug-views,
+.debug-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.debug-title {
+  margin-inline-end: var(--space-1);
+}
+
+.debug-views {
+  flex: 1;
+  flex-wrap: wrap;
+}
+
+.debug-views button,
+.debug-actions button,
+.console-input button {
+  min-height: 1.75rem;
+  padding-inline: var(--space-2);
+  border-radius: var(--control-radius);
   color: var(--text-secondary);
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+
+.debug-actions button {
+  display: grid;
+  min-width: 1.75rem;
+  place-items: center;
+  padding-inline: var(--space-1);
+}
+
+.debug-views button[aria-pressed="true"],
+.workspace-debug button:enabled:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+.workspace-debug button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.workspace-debug :is(input, button):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.debug-console {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+}
+
+.terminal-frame {
+  position: relative;
+  min-height: 1.25rem;
+  flex: 1;
+}
+
+.terminal-surface {
+  position: absolute;
+  inset: var(--space-1) var(--space-2);
+}
+
+.terminal-surface .xterm {
+  height: 100%;
+}
+
+.debug-empty {
+  position: relative;
+  padding: var(--space-2) var(--space-3);
+  pointer-events: none;
+  color: var(--text-secondary);
+  font-size: 0.8125rem;
+}
+
+.console-input {
+  display: flex;
+  flex: none;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-2);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.console-input input {
+  min-width: 0;
+  min-height: 1.75rem;
+  flex: 1;
+  padding-inline: var(--space-2);
+  border: 1px solid var(--border-control);
+  border-radius: var(--control-radius);
+  background: var(--surface-workspace);
+  font-family: var(--code-font);
+  font-size: 0.8125rem;
+}
+
+.console-notice {
+  padding-inline: var(--space-3);
+  color: var(--text-secondary);
+  font-size: 0.8125rem;
+  overflow-wrap: anywhere;
+}
+
+.console-notice[role="alert"] {
+  color: var(--signal-error);
+}
+
+.debug-report {
+  min-height: 0;
+  flex: 1;
+  overflow: auto;
+  padding: var(--space-2) var(--space-3);
+  color: var(--text-secondary);
+  font-size: 0.8125rem;
+}
+
+.debug-report dl {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: var(--space-1) var(--space-3);
+}
+
+.debug-report dd,
+.debug-report p,
+.debug-report pre {
+  overflow-wrap: anywhere;
+}
+
+.debug-report pre {
+  font-family: var(--code-font);
+  white-space: pre-wrap;
+}
+
+.debug-result {
+  margin-block-end: var(--space-1);
+  color: var(--text-primary);
+  font-weight: 650;
 }
 
 @media (max-width: 53rem) {
@@ -674,7 +848,7 @@
   }
 
   .workspace-debug {
-    min-height: 8rem;
+    min-height: 14rem;
     border-top: 1px solid var(--border-subtle);
   }
 

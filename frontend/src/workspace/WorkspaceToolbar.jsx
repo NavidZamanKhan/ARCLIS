@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { PanelBottom, PanelLeft, PanelRight, SlidersHorizontal } from 'lucide-react';
+import { PanelBottom, PanelLeft, PanelRight, Play, SlidersHorizontal, Square } from 'lucide-react';
 
 import { Brand } from '../components/Brand.jsx';
 import { Button } from '../components/controls.jsx';
@@ -78,6 +78,7 @@ function LayoutMenu({ showPreview, toggleView, resetLayout }) {
 
 export function WorkspaceToolbar({
   theme, changeTheme, layout, togglePanel, showPreview, toggleView, resetLayout,
+  target, execution, runTarget,
 }) {
   const ViewTitle = showPreview ? 'span' : 'h1';
 
@@ -87,6 +88,18 @@ export function WorkspaceToolbar({
         <Brand />
         <ViewTitle className="workspace-name">{showPreview ? 'Design system' : 'Workspace'}</ViewTitle>
       </div>
+      {(!showPreview || execution.active) && (
+        <div className="execution-toolbar" aria-label="Execution">
+          <Button icon={Play} aria-label="Run" title={target ? 'Run ' + target.entry_file : 'Select an execution target'}
+            disabled={showPreview || !target || execution.active} onClick={runTarget} />
+          <Button icon={Square} aria-label="Stop" title="Stop execution"
+            disabled={!execution.active || execution.run.state === 'CANCELLING'} onClick={execution.stop} />
+          <span
+            className="execution-status" role="status" aria-label="Execution status"
+            data-state={execution.failed ? 'failed' : execution.active ? 'active' : 'idle'}
+          >{execution.label}</span>
+        </div>
+      )}
       <div className="workspace-toolbar-actions">
         <ThemeSelector value={theme} onChange={changeTheme} />
         {!showPreview && (

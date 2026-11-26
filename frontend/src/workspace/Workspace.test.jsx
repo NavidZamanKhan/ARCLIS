@@ -267,3 +267,20 @@ it('supports keyboard file actions and reopens a closed file from the jump bar',
   await user.selectOptions(jump, within(jump).getByRole('option', { name: 'main.c' }).value);
   expect(screen.getByLabelText('C source editor')).toBeDefined();
 });
+
+it('enables Run for the selected target independently of the editor tab', async () => {
+  const user = userEvent.setup();
+  render(<App />);
+  const run = screen.getByRole('button', { name: 'Run' });
+  const stop = screen.getByRole('button', { name: 'Stop', exact: true });
+  const target = screen.getByLabelText('Execution target');
+  expect(run.title).toBe('Run main.c');
+  expect(stop.disabled).toBe(true);
+
+  await user.selectOptions(target, '');
+  expect(run.disabled).toBe(true);
+  await user.selectOptions(target, within(target).getByRole('option', { name: 'main.py' }).value);
+  expect(run.disabled).toBe(false);
+  expect(run.title).toBe('Run main.py');
+  expect(screen.getByLabelText('C source editor')).toBeDefined();
+});
