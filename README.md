@@ -271,7 +271,8 @@ buffer. The starter sample calls `printf` through a system header. The
 educational analyzer reads a single buffer and reports undeclared names
 from headers as semantic diagnostics.
 
-`POST /api/v1/analysis/` accepts one JSON `source` string. Successful requests
+`POST /api/v1/analysis/` accepts a JSON `source` string and optional `language`
+(`c` by default, or `python`). Successful requests
 return HTTP 200 with `syntax_valid`, `semantic_valid`, `tokens`, `ast`,
 `scopes`, `symbols`, `diagnostics`, and `ir`. This includes source with
 diagnostics. An unavailable AST or IR is null. The local DEBUG opt-in and
@@ -284,6 +285,29 @@ limit receives a structured error.
 The dedicated container uses the scanner and `arclis-parse --analysis`, which
 collects AST, semantics, and IR in one parse. It reads a fixed, read-only input
 file and starts no submitted program.
+
+### Analyze Python in the workspace
+
+Build the dedicated Python 3.12 analyzer image from the repository root.
+
+```bash
+docker build --file docker/toolchains.Dockerfile --target python-analyzer \
+    --tag arclis-toolchain-python-analyzer:s19 docker
+```
+
+Use the same loopback backend opt-in, open a `.py` file, and select **Analyze**.
+The inspector labels these results **Native Python 3.12**. Tokens and the AST
+come from `tokenize` and `ast`, with original UTF-8 source ranges. Symbols and
+scope flags come from `symtable`. Python symbol rows jump to their owning
+scope. Native compiler checks report invalid constructs such as a module-level
+`return`. The analyzer operates on the editor's UTF-8 buffer. Intermediate
+code is available for educational C analysis. C++ and Java use compiler
+diagnostics from **Run**.
+
+On the local toolchains, G++ returned JSON compiler diagnostics and a class
+layout dump, and `javac -Xprint` returned type and member declarations. These
+outputs cover parts of the analysis workflow. The workspace analysis service
+currently supports C and Python reports.
 
 ## Run the Django backend locally
 
@@ -329,8 +353,9 @@ checks that Django can handle a request and works without a database connection.
 
 `GET /api/v1/capabilities/` lists the language identifiers used by the project
 and reports whether execution, interactive input, and analysis are available
-to the requesting client. Execution and interactive input are available
-only on the enabled loopback development server. Analysis remains unavailable.
+to the requesting client. The enabled loopback development server can provide
+interactive execution and analysis. When analysis is enabled, `analysis.languages`
+lists its supported languages.
 
 DRF endpoints use JSON. Raised request errors preserve their HTTP status and
 return `{"error": {"code": "...", "details": {...}}}`. For endpoints that accept
