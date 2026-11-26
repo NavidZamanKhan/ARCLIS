@@ -1,3 +1,4 @@
+import logging
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from pathlib import Path, PurePosixPath
@@ -19,6 +20,7 @@ from .states import ExecutionSession, ExecutionState
 from .workspace import SourceFile, materialize_workspace, validate_workspace
 
 WORKSPACE_PREFIX = "arclis-worker-"
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -119,7 +121,11 @@ def _run_job(validated, toolchain, argv, limits, *, native_stdin=None, interacti
                     if compiled:
                         outcome, diagnostics = _native_outcome(session, outcome)
                 finally:
-                    sandbox.remove(name)
+                    try:
+                        sandbox.remove(name)
+                    except SandboxError:
+                        logger.error("Docker cleanup could not be confirmed for job %s.", job_id)
+                        raise
             else:
                 outcome = SandboxOutcome(stopped)
     except SandboxError as error:

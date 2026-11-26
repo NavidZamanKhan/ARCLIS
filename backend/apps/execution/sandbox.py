@@ -205,9 +205,15 @@ class DockerSandbox:
         return SandboxOutcome(outcome, stdout, stderr, exit_code, duration)
 
     def remove(self, name):
-        result = self._call("container", "rm", "--force", "--volumes", name)
-        if result.returncode and f"no such container: {name}" not in result.stderr.lower():
-            raise SandboxError("Docker did not confirm cleanup of the job container.")
+        # A timed-out request may have removed the container before losing its response.
+        for _ in range(2):
+            try:
+                result = self._call("container", "rm", "--force", "--volumes", name)
+            except SandboxError:
+                continue
+            if result.returncode == 0 or f"no such container: {name}" in result.stderr.lower():
+                return
+        raise SandboxError("Docker did not confirm cleanup of the job container.")
 
 
 def compiler_header(output):

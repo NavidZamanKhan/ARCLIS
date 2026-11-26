@@ -2,9 +2,11 @@ import os
 import subprocess
 from pathlib import Path
 from unittest import TestCase, skipUnless
-from unittest.mock import patch
+from unittest.mock import Mock, call, patch
 
-from .sandbox import SandboxError, SandboxLimits, SandboxOutcome, Toolchain, validate_engine_info
+from .sandbox import (
+    DockerSandbox, SandboxError, SandboxLimits, SandboxOutcome, Toolchain, validate_engine_info,
+)
 from .states import ExecutionState
 from .worker import WORKSPACE_PREFIX, run_job
 from .workspace import InvalidWorkspace, SourceFile
@@ -48,6 +50,47 @@ scratch = os.statvfs("/tmp")
 assert scratch.f_blocks * scratch.f_frsize == 8 * 1024 * 1024
 Path("/tmp/result").write_text("temporary")
 print("isolation-ok")
+"""
+
+CPU_FIXTURE = """
+from pathlib import Path
+from time import process_time
+
+stats = Path("/sys/fs/cgroup/cpu.stat")
+
+def throttled_periods():
+    return int(dict(line.split() for line in stats.read_text().splitlines())["nr_throttled"])
+
+before = throttled_periods()
+deadline = process_time() + 0.25
+while process_time() < deadline:
+    pass
+assert throttled_periods() > before
+"""
+
+PROCESS_FIXTURE = """
+import subprocess
+from pathlib import Path
+
+events = Path("/sys/fs/cgroup/pids.events")
+
+def denied_processes():
+    return int(dict(line.split() for line in events.read_text().splitlines())["max"])
+
+before = denied_processes()
+children = []
+try:
+    for _ in range(12):
+        try:
+            children.append(subprocess.Popen(["/bin/sleep", "10"]))
+        except BlockingIOError:
+            break
+    assert 0 < len(children) < 12
+    assert denied_processes() > before
+finally:
+    for child in children:
+        child.terminate()
+        child.wait(timeout=2)
 """
 
 
@@ -97,8 +140,13 @@ class WorkerValidationTests(TestCase):
             sandbox = docker.return_value
             sandbox.execute.return_value = SandboxOutcome(ExecutionState.COMPLETED)
             sandbox.remove.side_effect = SandboxError("Docker did not confirm cleanup.")
-            result = run_job([SOURCE], Toolchain.PYTHON, ["python3", "main.py"])
+            with self.assertLogs("apps.execution.worker", level="ERROR") as logs:
+                result = run_job([SOURCE], Toolchain.PYTHON, ["python3", "main.py"])
 
+        self.assertEqual(
+            [record.getMessage() for record in logs.records],
+            [f"Docker cleanup could not be confirmed for job {result.job_id}."],
+        )
         self.assertEqual(
             result.history,
             (
@@ -111,6 +159,34 @@ class WorkerValidationTests(TestCase):
 
     def assert_workspace_removed(self, job_id):
         self.assertEqual(list(Path("/tmp").glob(f"{WORKSPACE_PREFIX}{job_id}-*")), [])
+
+
+class DockerCleanupTests(TestCase):
+    def setUp(self):
+        self.name = "arclis-job-cleanup-fixture"
+        self.remove_job = call("container", "rm", "--force", "--volumes", self.name)
+        self.sandbox = DockerSandbox.__new__(DockerSandbox)
+        self.command = Mock()
+        self.sandbox._call = self.command
+
+    def test_successful_cleanup_does_not_retry(self):
+        self.command.return_value = subprocess.CompletedProcess([], 0)
+        self.sandbox.remove(self.name)
+        self.assertEqual(self.command.call_args_list, [self.remove_job])
+
+    def test_cleanup_retries_and_accepts_already_removed_container(self):
+        self.command.side_effect = [
+            SandboxError("Docker control command could not be completed."),
+            subprocess.CompletedProcess([], 1, stderr=f"No such container: {self.name}"),
+        ]
+        self.sandbox.remove(self.name)
+        self.assertEqual(self.command.call_args_list, [self.remove_job, self.remove_job])
+
+    def test_unconfirmed_cleanup_stops_after_two_attempts(self):
+        self.command.return_value = subprocess.CompletedProcess([], 1, stderr="daemon unavailable")
+        with self.assertRaisesRegex(SandboxError, "Docker did not confirm cleanup"):
+            self.sandbox.remove(self.name)
+        self.assertEqual(self.command.call_args_list, [self.remove_job, self.remove_job])
 
 
 @skipUnless(os.environ.get("ARCLIS_TEST_WORKER") == "1", "Requires rootless Docker and images")
@@ -160,6 +236,20 @@ class DockerWorkerTests(TestCase):
 
         self.assert_outcome(result, ExecutionState.COMPLETED)
         self.assertEqual(result.outcome.stdout, b"isolation-ok\n")
+
+    def test_cpu_quota_throttles_trusted_computation(self):
+        result = run_job(
+            [SOURCE], Toolchain.PYTHON, ["python3", "-I", "-c", CPU_FIXTURE],
+            SandboxLimits(cpu_millis=250, timeout_seconds=5),
+        )
+        self.assert_outcome(result, ExecutionState.COMPLETED)
+
+    def test_process_limit_denies_additional_children(self):
+        result = run_job(
+            [SOURCE], Toolchain.PYTHON, ["python3", "-I", "-c", PROCESS_FIXTURE],
+            SandboxLimits(processes=8, timeout_seconds=5),
+        )
+        self.assert_outcome(result, ExecutionState.COMPLETED)
 
     def test_nonzero_exit_keeps_stderr(self):
         result = run_job(
