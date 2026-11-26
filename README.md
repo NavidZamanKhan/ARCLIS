@@ -364,6 +364,37 @@ errors use the `validation_error` code and return field or non-field errors
 under `details`. Malformed JSON uses `parse_error`, and internal errors return
 a generic message. The Django health endpoint retains its existing contract.
 
+## Run the browser integration suite
+
+Run this suite in Ubuntu under WSL 2 with the backend Python virtual
+environment active and the rootless Docker engine available. Build the
+C/C++, Java, and Python execution images, plus the C and Python analyzer
+images, using the commands in this README.
+
+```bash
+cd frontend
+npm ci
+npx playwright install chromium --only-shell
+npm run test:e2e
+```
+
+The command builds the frontend and starts a Vite preview on loopback port
+5173 and Uvicorn on loopback port 8000. Both ports need to be free. Playwright
+uses fresh browser contexts, enables the local API opt-ins for the suite,
+and stops both servers on exit. Failure screenshots are written to
+`frontend/test-results/`.
+
+The suite exercises multi-file C, C++, Java, and Python jobs with two input
+lines and EOF. It also checks workspace persistence, compiler and runtime
+errors, concurrent browser sessions and cancellation, HTTP and WebSocket
+failures, and the C and Python analysis inspectors.
+
+The S21 verification on Ubuntu 24.04 under WSL 2 passed all 11 browser
+workflows twice with `npm run test:e2e -- --repeat-each=2`. The same checkout
+passed all 85 Docker-enabled Django tests, 37 frontend tests, 55 compiler
+fixtures, and two C API tests. Both preview servers shut down, and the rootless
+Docker job containers and temporary workspaces were cleared.
+
 ## ASGI and WebSocket routing
 
 Uvicorn serves the Django HTTP application and routes WebSocket handshakes
