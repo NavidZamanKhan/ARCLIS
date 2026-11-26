@@ -1,3 +1,4 @@
 /.env.example text eol=lf
 /compiler_engine/c/lexer.l text eol=lf
+/compiler_engine/c/parser.y text eol=lf
 /compiler_engine/c/Makefile text eol=lf

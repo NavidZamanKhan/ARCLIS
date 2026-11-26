@@ -47,6 +47,13 @@ typedef enum {
 } LexerDiagnostic;
 
 typedef struct {
+    const char *code;
+    const char *message;
+} LexerDiagnosticInfo;
+
+const LexerDiagnosticInfo *lexer_diagnostic_info(LexerDiagnostic diagnostic);
+
+typedef struct {
     LexerTokenKind kind;
     LexerDiagnostic diagnostic;
     const char *lexeme;

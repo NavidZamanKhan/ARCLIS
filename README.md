@@ -79,7 +79,7 @@ From the repository root, build the scanner with GNU Flex, Make, and a C17
 compiler. Pass the path to a C source file or pipe source through stdin.
 
 ```bash
-make -C compiler_engine/c
+make -C compiler_engine/c build/arclis-lex
 printf 'int main(void) { return 0; }\n' | compiler_engine/c/build/arclis-lex
 compiler_engine/c/build/arclis-lex path/to/source.c
 make -C compiler_engine/c test
@@ -99,8 +99,36 @@ tokens, and the lexer reports unsupported directives, malformed literals, and
 unexpected characters. The command exits with 0 for successful tokenization,
 1 for lexical diagnostics, or 2 for a command or I/O error. This scanner is
 part of the educational compiler and runs independently of native execution.
-The test target uses Python 3 for the scanner fixtures and runs a C test that
-interleaves two scanner instances.
+## Run the educational C syntax analyzer in WSL
+
+The syntax analyzer builds on the scanner and requires GNU Bison 3.8 or
+later. It accepts files or stdin through the same command convention.
+
+~~~bash
+make -C compiler_engine/c
+compiler_engine/c/build/arclis-parse path/to/source.c
+printf 'int main(void) { return 1 + 2 * 3; }\n' | compiler_engine/c/build/arclis-parse
+make -C compiler_engine/c test
+~~~
+
+The grammar covers simple global and local declarations, function prototypes
+and definitions, blocks, if/else, while, for, return, and file-scope includes.
+Expressions support calls, parentheses, increment and decrement, arithmetic,
+comparisons, logical operators, assignment, and comma expressions. Assignment
+groups from the right. Arithmetic groups from the left within each precedence
+level. An else attaches to the closest unmatched if. The analyzer also accepts
+empty or comment-only files.
+
+The parser emits JSON Lines diagnostics with lexical or syntax phases and the
+same source range format as the scanner. A final syntax-result record includes
+validity and the diagnostic count. It exits with 0 for valid syntax, 1 for
+invalid syntax, or 2 for a driver or parser resource error. Pointer declarators,
+arrays, member access, and other unsupported syntax produce diagnostics.
+Type and scope checks belong to the later semantic analysis stage.
+
+Make writes the Bison state report to compiler_engine/c/build/parser.output.
+The build treats unresolved shift/reduce and reduce/reduce conflicts as errors.
+The test target uses Python 3 and runs scanner and parser fixtures.
 
 ## Run the Django backend locally
 
