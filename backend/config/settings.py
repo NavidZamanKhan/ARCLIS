@@ -31,7 +31,7 @@ FRONTEND_ORIGINS = parse_frontend_origins(
 CORS_ALLOWED_ORIGINS = FRONTEND_ORIGINS
 CORS_URLS_REGEX = r"^/api/v1/"
 
-INSTALLED_APPS = ["apps.core", "corsheaders", "rest_framework"]
+INSTALLED_APPS = ["apps.core", "channels", "corsheaders", "rest_framework"]
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "corsheaders.middleware.CorsMiddleware",
@@ -39,6 +39,7 @@ MIDDLEWARE = [
 ]
 ROOT_URLCONF = "config.urls"
 WSGI_APPLICATION = "config.wsgi.application"
+ASGI_APPLICATION = "config.asgi.application"
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [],

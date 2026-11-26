@@ -16,7 +16,7 @@ source ./.env
 set +a
 python backend/manage.py check
 (cd backend && python manage.py test)
-python backend/manage.py runserver 127.0.0.1:8000
+python -m uvicorn --app-dir backend config.asgi:application --host 127.0.0.1 --port 8000 --ws websockets-sansio
 ```
 
 The local environment file is ignored by Git. Load it only after checking its
@@ -26,7 +26,7 @@ contents, since `source` executes it as a shell script.
 | --- | --- |
 | `DJANGO_DEBUG` | Set to `1` for local development. Otherwise debug mode is off. |
 | `DJANGO_ALLOWED_HOSTS` | Comma-separated host names. Defaults to `127.0.0.1,localhost,[::1]`. |
-| `DJANGO_FRONTEND_ORIGINS` | Comma-separated browser origins for `/api/v1/`. Debug defaults to `http://localhost:5173,http://127.0.0.1:5173`. Outside debug mode, the default is an empty allowlist. Use exact HTTP(S) origins without paths or wildcards. |
+| `DJANGO_FRONTEND_ORIGINS` | Comma-separated browser origins for API CORS and WebSocket handshakes. Debug defaults to `http://localhost:5173,http://127.0.0.1:5173`. Outside debug mode, the default is an empty allowlist. Use exact HTTP(S) origins without paths or wildcards. |
 | `DJANGO_SECRET_KEY` | Required with debug mode off. Debug mode generates an ephemeral key if this setting is empty. |
 | `DJANGO_SQLITE_PATH` | Optional SQLite path. Defaults to `backend/db.sqlite3`. |
 
@@ -53,3 +53,10 @@ data, use a DRF serializer with `is_valid(raise_exception=True)`. Validation
 errors use the `validation_error` code and return field or non-field errors
 under `details`. Malformed JSON uses `parse_error`, and internal errors return
 a generic message. The Django health endpoint retains its existing contract.
+
+## ASGI and WebSocket routing
+
+Uvicorn serves the Django HTTP application and routes WebSocket handshakes
+through the configured origin allowlist. Every unregistered WebSocket path is
+rejected during the handshake. The WebSocket test fixture is defined only in
+the test suite. Interactive execution routes will be added in their own stage.
