@@ -74,12 +74,12 @@ Build the three images from the repository root:
 ```bash
 (
   set -e
-  docker build --file docker/toolchains.Dockerfile --target c-cpp \
-    --tag arclis-toolchain-c-cpp:s04 docker
-  for target in java python; do
+  for target in c-cpp java; do
     docker build --file docker/toolchains.Dockerfile --target "$target" \
-      --tag "arclis-toolchain-$target:s03" docker
+      --tag "arclis-toolchain-$target:s05" docker
   done
+  docker build --file docker/toolchains.Dockerfile --target python \
+    --tag arclis-toolchain-python:s03 docker
 )
 ```
 
@@ -129,3 +129,16 @@ are in `ExecutionResult.outcome`. Diagnostics and both output streams share one
 byte budget. Compiler failure has state `COMPILATION_FAILED` and no program
 exit code. A running program that returns a nonzero exit has state
 `RUNTIME_FAILED` and preserves its exit code.
+
+### Java adapter
+
+Back-end callers use `apps.execution.java.run_java` with the fully qualified
+main class, the submitted `SourceFile` objects, and optional buffered stdin.
+For example, `lab.Main` uses `lab/Main.java` with a `package lab;` declaration.
+Use case-sensitive `.java` paths with ASCII identifiers starting with a letter
+or underscore. The adapter compiles all submitted Java sources with annotation
+processing disabled and runs the selected class from job-local scratch.
+
+Java defaults to 384 MiB of container memory with a minimum of 192 MiB. The
+compiler and runtime each limit their heap to one third of that container
+budget. They share the job's time and output budgets.

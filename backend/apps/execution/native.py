@@ -2,10 +2,9 @@ from collections.abc import Sequence
 from enum import StrEnum
 
 from .sandbox import SandboxLimits, Toolchain
-from .worker import ExecutionResult, _run_job
+from .worker import ExecutionResult, run_compiled_job
 from .workspace import InvalidWorkspace, SourceFile, validate_workspace
 
-MAX_STDIN_BYTES = 64 * 1024
 _COMPILERS = {
     "c": ("gcc", "-std=c17", frozenset({".c"}), frozenset({".h"})),
     "cpp": (
@@ -28,10 +27,8 @@ def run_native(
     limits: SandboxLimits = SandboxLimits(),
 ) -> ExecutionResult:
     """Compile and run one validated C or C++ program within the local worker."""
-    if not isinstance(language, NativeLanguage) or not isinstance(limits, SandboxLimits):
-        raise ValueError("Supply a C or C++ language and validated worker limits.")
-    if not isinstance(stdin, bytes) or len(stdin) > MAX_STDIN_BYTES:
-        raise ValueError("Standard input must be bytes and at most 64 KiB.")
+    if not isinstance(language, NativeLanguage):
+        raise ValueError("Supply a C or C++ language.")
 
     workspace = validate_workspace(files)
     compiler, standard, source_extensions, header_extensions = _COMPILERS[language]
@@ -45,8 +42,9 @@ def run_native(
         raise InvalidWorkspace("Supply at least one translation unit for the chosen language.")
 
     command = (
-        "python3", "-I", "/opt/arclis/native_job.py", str(limits.output_bytes),
         compiler, standard, "-fdiagnostics-color=never", "-I", "/workspace",
         "-o", "/tmp/arclis-program", *sorted(sources),
     )
-    return _run_job(workspace, Toolchain.C_CPP, command, limits, native_stdin=stdin)
+    return run_compiled_job(
+        workspace, Toolchain.C_CPP, command, ("/tmp/arclis-program",), stdin=stdin, limits=limits,
+    )

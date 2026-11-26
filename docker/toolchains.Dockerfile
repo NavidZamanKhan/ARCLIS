@@ -12,8 +12,10 @@ USER 65534:65534
 
 FROM base AS java
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends openjdk-21-jdk-headless \
+    && apt-get install -y --no-install-recommends openjdk-21-jdk-headless python3 \
     && rm -rf /var/lib/apt/lists/*
+RUN install -d -m 0755 /opt/arclis
+COPY --chmod=0444 native_job.py /opt/arclis/native_job.py
 USER 65534:65534
 
 FROM base AS python

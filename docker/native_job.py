@@ -6,7 +6,6 @@ import struct
 import subprocess
 import sys
 
-PROGRAM = "/tmp/arclis-program"
 STDIN_FILE = "/workspace/.arclis-stdin"
 HEADER = struct.Struct(">4sBI")
 
@@ -19,8 +18,10 @@ def report(phase, diagnostics):
 
 def main():
     cap = int(sys.argv[1])
+    runtime_start = 3 + int(sys.argv[2])
+    command = sys.argv[runtime_start:]
     with subprocess.Popen(
-        sys.argv[2:],
+        sys.argv[3:runtime_start],
         stdin=subprocess.DEVNULL,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
@@ -41,7 +42,7 @@ def main():
     with open(STDIN_FILE, "rb") as source:
         os.dup2(source.fileno(), 0)
     report(0, diagnostics)
-    os.execv(PROGRAM, [PROGRAM])
+    os.execvp(command[0], command)
 
 
 if __name__ == "__main__":

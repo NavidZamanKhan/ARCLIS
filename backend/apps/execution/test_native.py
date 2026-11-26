@@ -3,16 +3,16 @@ from pathlib import Path
 from unittest import TestCase, skipUnless
 from unittest.mock import patch
 
-from .native import MAX_STDIN_BYTES, NativeLanguage, run_native
+from .native import NativeLanguage, run_native
 from .sandbox import SandboxLimits, Toolchain
 from .states import ExecutionState
-from .worker import WORKSPACE_PREFIX
+from .worker import MAX_STDIN_BYTES, WORKSPACE_PREFIX
 from .workspace import InvalidWorkspace, SourceFile
 
 
 class NativeValidationTests(TestCase):
     def test_invalid_inputs_never_reach_the_worker(self):
-        with patch("apps.execution.native._run_job") as worker:
+        with patch("apps.execution.worker._run_job") as worker:
             for files in (
                 [SourceFile("../main.c", "")],
                 [SourceFile("main.cpp", "")],
@@ -27,7 +27,7 @@ class NativeValidationTests(TestCase):
             worker.assert_not_called()
 
     def test_arguments_are_fixed_and_paths_are_absolute_inside_workspace(self):
-        with patch("apps.execution.native._run_job") as worker:
+        with patch("apps.execution.worker._run_job") as worker:
             run_native(
                 NativeLanguage.CPP,
                 [
@@ -41,10 +41,11 @@ class NativeValidationTests(TestCase):
         _, toolchain, command, _ = worker.call_args.args
         self.assertEqual(toolchain, Toolchain.C_CPP)
         self.assertEqual(
-            command[4:],
+            command[5:],
             (
                 "g++", "-std=c++17", "-fdiagnostics-color=never", "-I", "/workspace",
                 "-o", "/tmp/arclis-program", "/workspace/app/main.cpp", "/workspace/lib/util.cc",
+                "/tmp/arclis-program",
             ),
         )
         self.assertEqual(worker.call_args.kwargs, {"native_stdin": b"hello"})

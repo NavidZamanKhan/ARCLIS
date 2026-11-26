@@ -17,6 +17,7 @@ from .states import ExecutionSession, ExecutionState
 from .workspace import SourceFile, materialize_workspace, validate_workspace
 
 WORKSPACE_PREFIX = "arclis-worker-"
+MAX_STDIN_BYTES = 64 * 1024
 
 
 @dataclass(frozen=True)
@@ -44,6 +45,20 @@ def run_job(
     ):
         raise ValueError("Supply a toolchain, validated limits, and trusted command arguments.")
     return _run_job(validate_workspace(files), toolchain, argv, limits)
+
+
+def run_compiled_job(workspace, toolchain, compiler, program, *, stdin, limits):
+    """Run trusted compile and program argv with framed diagnostics and buffered stdin."""
+    if not isinstance(limits, SandboxLimits):
+        raise ValueError("Supply validated worker limits.")
+    if not isinstance(stdin, bytes) or len(stdin) > MAX_STDIN_BYTES:
+        raise ValueError("Standard input must be bytes and at most 64 KiB.")
+
+    command = (
+        "python3", "-I", "/opt/arclis/native_job.py", str(limits.output_bytes),
+        str(len(compiler)), *compiler, *program,
+    )
+    return _run_job(workspace, toolchain, command, limits, native_stdin=stdin)
 
 
 def _run_job(validated, toolchain, argv, limits, *, native_stdin=None):
