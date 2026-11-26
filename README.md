@@ -82,6 +82,7 @@ compiler. Pass the path to a C source file or pipe source through stdin.
 make -C compiler_engine/c
 printf 'int main(void) { return 0; }\n' | compiler_engine/c/build/arclis-lex
 compiler_engine/c/build/arclis-lex path/to/source.c
+make -C compiler_engine/c test
 ```
 
 The command emits one JSON record per token or error, followed by an EOF
@@ -98,6 +99,8 @@ tokens, and the lexer reports unsupported directives, malformed literals, and
 unexpected characters. The command exits with 0 for successful tokenization,
 1 for lexical diagnostics, or 2 for a command or I/O error. This scanner is
 part of the educational compiler and runs independently of native execution.
+The test target uses Python 3 for the scanner fixtures and runs a C test that
+interleaves two scanner instances.
 
 ## Run the Django backend locally
 
