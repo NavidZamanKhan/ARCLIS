@@ -8,7 +8,7 @@ FILE *cli_open_source(int argc, char **argv, const char *tool)
         fprintf(stderr, "Usage: %s [source-file|-]\n", tool);
         return NULL;
     }
-    if (argc == 1 || strcmp(argv[1], "-") == 0) {
+    if (argc < 2 || strcmp(argv[1], "-") == 0) {
         return stdin;
     }
     FILE *source = fopen(argv[1], "rb");
