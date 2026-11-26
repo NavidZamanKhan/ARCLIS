@@ -2,6 +2,69 @@
 
 Advanced Runtime and Compiler Lab for Interactive Study
 
+ARCLIS is a browser IDE for C, C++, Java, and Python with an interactive
+console and a compiler-phase inspector. The educational C analyzer exposes
+tokens, a syntax tree, symbols, diagnostics, and three-address intermediate
+code. Run uses the language's native toolchain inside a local sandbox.
+
+- [Start the full local workspace](#start-the-full-local-workspace) for editing, Run, and Analyze.
+- [Run the restricted HTTPS deployment](#run-the-restricted-https-deployment) for the editor and workspace with the worker features disabled.
+- [Architecture and API contract](docs/architecture.md) covers the components, supported C grammar, and runtime boundaries.
+- [Presentation and viva notes](docs/presentation.md) walk through the runnable examples in [`examples/`](examples/).
+- [Final verification](docs/verification.md) records the checks and known limits.
+
+## Start the full local workspace
+
+Use Ubuntu 24.04 on Linux or WSL 2, Git, Python 3.12 with `venv`, Node.js
+24.15 or later in the Node 24 line, and a recent Chromium browser. For Run
+and Analyze, use rootless Docker Engine with builtin seccomp, systemd cgroup
+v2, and working CPU, memory, swap, and PID controllers. GNU Make, a C17
+compiler, Flex, and Bison 3.8 or later are needed for the separate C command-line
+build. Execution toolchains come from the images built below.
+
+In an Ubuntu terminal, clone the repository and prepare the five images and
+backend dependencies. The commands use the currently configured rootless daemon.
+
+```bash
+git clone https://github.com/NavidZamanKhan/ARCLIS.git
+cd ARCLIS
+systemctl --user start docker
+docker info --format '{{.CgroupDriver}} / cgroup v{{.CgroupVersion}}'
+(
+  set -e
+  for target in c-cpp java python; do
+    docker build --file docker/toolchains.Dockerfile --target "$target" \
+      --tag "arclis-toolchain-$target:s06" docker
+  done
+  docker build --file docker/analyzer.Dockerfile \
+    --tag arclis-toolchain-c-analyzer:s18 compiler_engine/c
+  docker build --file docker/toolchains.Dockerfile --target python-analyzer \
+    --tag arclis-toolchain-python-analyzer:s19 docker
+)
+```
+
+After the images build, install the backend and start the loopback server.
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r backend/requirements.txt
+if [ ! -e .env ]; then cp .env.example .env; fi
+set -a
+source ./.env
+set +a
+ARCLIS_ENABLE_LOCAL_EXECUTION=1 ARCLIS_ENABLE_LOCAL_ANALYSIS=1 \
+  python -m uvicorn --app-dir backend config.asgi:application --host 127.0.0.1 --port 8000 \
+  --workers 1 --no-proxy-headers --ws websockets-sansio --ws-max-size 24576 --ws-max-queue 16
+```
+
+In a second Ubuntu terminal, use the [frontend commands](#run-the-frontend-locally),
+then open `http://127.0.0.1:5173`. Check the backend at
+`http://127.0.0.1:8000/api/v1/health/` and inspect
+`/api/v1/capabilities/` on the same backend if the worker features are unavailable.
+Dependency versions are pinned in [`backend/requirements.txt`](backend/requirements.txt)
+and locked in [`frontend/package-lock.json`](frontend/package-lock.json).
+
 ## Run the restricted HTTPS deployment
 
 This profile serves the Vite production build with Nginx and runs Django
@@ -140,8 +203,8 @@ Narrow windows stack the panels vertically.
 The View menu opens the design system preview or resets the workspace layout
 after confirmation. Graphite and Silver work in both views, and the browser
 saves the selected theme locally. The workspace editor accepts Monaco
-diagnostic markers keyed by filename. Backend execution and compiler
-diagnostics will be connected in a later stage.
+diagnostic markers keyed by filename. Run and Analyze attach supported
+diagnostics to the submitted editor snapshot.
 
 Run `npm test` for frontend tests and `npm run build` to produce
 `frontend/dist/`, including Monaco's worker. The theme tokens, including the
@@ -411,6 +474,7 @@ contents, since `source` executes it as a shell script.
 | `DJANGO_FRONTEND_ORIGINS` | Comma-separated browser origins for API CORS and WebSocket handshakes. Debug defaults to `http://localhost:5173,http://127.0.0.1:5173`. Outside debug mode, the default is an empty allowlist. Use exact HTTP(S) origins without paths or wildcards. |
 | `DJANGO_SECRET_KEY` | Required with debug mode off. Debug mode generates an ephemeral key if this setting is empty. |
 | `DJANGO_SQLITE_PATH` | Optional SQLite path. Defaults to `backend/db.sqlite3`. |
+| `ARCLIS_ENABLE_LOCAL_EXECUTION` and `ARCLIS_ENABLE_LOCAL_ANALYSIS` | Independent opt-ins for debug mode on loopback. The restricted deployment turns both off. |
 
 ## Health endpoint
 
@@ -526,9 +590,10 @@ read-only. The writable scratch area is a size-limited tmpfs. Jobs run as
 UID/GID 65534 with no network, no capabilities, no privilege escalation, and
 a read-only root filesystem. The Docker socket stays with the orchestrator.
 
-Default per-job limits are one CPU, 256 MiB RAM with zero swap, 64 processes,
-32 MiB of scratch space, 256 KiB of combined output, and 15 seconds for
-compilation, execution, and output capture. The worker reports that elapsed interval, in
+Default non-interactive execution limits are one CPU, 256 MiB RAM (384 MiB
+for Java), zero swap, 64 processes, 32 MiB of scratch space, 256 KiB of
+combined output, and 15 seconds for compilation, execution, and output
+capture. The worker reports that elapsed interval in
 milliseconds. Workspace preparation and Docker cleanup are outside that
 interval. The worker retries unconfirmed container removal once. If cleanup
 still fails, it returns an internal error and logs the job ID. Local operators
