@@ -11,6 +11,7 @@
   --control-height: 2.25rem;
   --control-radius: 0.375rem;
   --surface-radius: 0.625rem;
+  --modal-backdrop: #11141b94;
 
   color-scheme: dark;
   --surface-workspace: #1f2024;

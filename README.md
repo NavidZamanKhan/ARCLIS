@@ -13,10 +13,17 @@ npm ci
 npm run dev
 ```
 
-Open `http://127.0.0.1:5173` for the Cupertino Graphite component preview.
-Select Graphite or Silver using the keyboard or pointer. The browser saves
-the selected theme locally. The preview includes language-specific source
-samples and shared controls and works independently of the backend.
+Open `http://127.0.0.1:5173` for the sample workspace. Select a read-only
+source file in the navigator and switch between Files and Symbols to browse
+its sample declarations. The toolbar toggles the navigator, inspector, and
+debug panel. Drag a separator or focus it and use the arrow keys to resize
+its panel. Home and End move the panel to its minimum and maximum sizes.
+Narrow windows stack the panels vertically.
+
+The View menu opens the design system preview or resets the workspace layout
+after confirmation. Graphite and Silver work in both views, and the browser
+saves the selected theme locally. The workspace currently previews source
+independently of the backend.
 
 Run `npm test` for frontend tests and `npm run build` to produce
 `frontend/dist/`. The source preview uses static samples. The theme tokens,

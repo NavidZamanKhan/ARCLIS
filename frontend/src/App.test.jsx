@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -16,7 +16,9 @@ describe('the component preview', () => {
   it('switches the source sample and resets the controls without changing the theme', async () => {
     const user = userEvent.setup();
     render(<App />);
+    await user.click(screen.getByRole('button', { name: 'View' }));
     await user.click(screen.getByRole('button', { name: 'Design system' }));
+    const preview = within(screen.getByRole('main'));
 
     const language = screen.getByRole('combobox', { name: 'Sample language' });
     const reset = screen.getByRole('button', { name: 'Reset' });
@@ -24,13 +26,13 @@ describe('the component preview', () => {
 
     await user.click(screen.getByRole('radio', { name: 'Silver' }));
     await user.selectOptions(language, 'python');
-    expect(screen.getByLabelText('Python source sample')).toBeDefined();
-    expect(screen.getByText('main.py')).toBeDefined();
+    expect(preview.getByLabelText('Python source sample')).toBeDefined();
+    expect(preview.getByText('main.py')).toBeDefined();
 
     reset.focus();
     await user.keyboard('{Enter}');
     expect(language.value).toBe('c');
-    expect(screen.getByText('main.c')).toBeDefined();
+    expect(preview.getByText('main.c')).toBeDefined();
     expect(document.documentElement.dataset.theme).toBe('silver');
   });
 
@@ -38,6 +40,7 @@ describe('the component preview', () => {
     const user = userEvent.setup();
     const writeText = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue();
     render(<App />);
+    await user.click(screen.getByRole('button', { name: 'View' }));
     await user.click(screen.getByRole('button', { name: 'Design system' }));
 
     await user.selectOptions(screen.getByRole('combobox', { name: 'Sample language' }), 'python');
@@ -53,6 +56,7 @@ describe('the component preview', () => {
     const user = userEvent.setup();
     vi.spyOn(navigator.clipboard, 'writeText').mockRejectedValue(new Error('Denied'));
     render(<App />);
+    await user.click(screen.getByRole('button', { name: 'View' }));
     await user.click(screen.getByRole('button', { name: 'Design system' }));
 
     await user.click(screen.getByRole('button', { name: 'Copy source' }));
