@@ -20,7 +20,7 @@ ALLOWED_HOSTS = [
     if host.strip()
 ]
 
-INSTALLED_APPS = []
+INSTALLED_APPS = ["apps.core"]
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "django.middleware.common.CommonMiddleware",
