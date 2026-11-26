@@ -2,6 +2,7 @@ import { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
 
 import { analysisMarkers, sourceRanges } from '../analysis/sourceRanges.js';
 import { useAnalysis } from '../analysis/useAnalysis.js';
+import { backendUrl, restrictedDeployment } from '../backend.js';
 import { DebugPanel } from '../execution/DebugPanel.jsx';
 import { makeExecutionPayload } from '../execution/payload.js';
 import { useExecution } from '../execution/useExecution.js';
@@ -42,6 +43,7 @@ export function Workspace({ hidden, layout, onResize, showPanel, theme, toolbar,
   const [editorFocusRequest, setEditorFocusRequest] = useState(0);
   const [feedback, setFeedback] = useState(null);
   const [lineCount, setLineCount] = useState(0);
+  const [serviceStatus, setServiceStatus] = useState('Checking services…');
   const [preferences, setPreferences] = useState(readEditorPreferences);
   const [extent, setExtent] = useState({ width: 1200, height: 800 });
   const files = useMemo(() => project.entries.filter(({ kind }) => kind === 'file'), [project.entries]);
@@ -55,7 +57,8 @@ export function Workspace({ hidden, layout, onResize, showPanel, theme, toolbar,
   const locateAnalysisRange = useMemo(() => snapshot && sourceRanges(snapshot.content), [snapshot]);
   const report = analysis.state?.report;
   const analysisLanguage = activeFile && fileMode(activeFile.path);
-  const canAnalyze = !loading && ['c', 'python'].includes(analysisLanguage) && analysis.state?.status !== 'running';
+  const canAnalyze = !restrictedDeployment && !loading && ['c', 'python'].includes(analysisLanguage)
+    && analysis.state?.status !== 'running';
   const rawIssues = useMemo(() => readBuildIssues(execution.run.log, buildSources), [execution.run.log, buildSources]);
   const issues = useMemo(
     () => currentIssues(rawIssues, buildSources, files, readContent),
@@ -106,7 +109,7 @@ export function Workspace({ hidden, layout, onResize, showPanel, theme, toolbar,
   }
 
   function runTarget(testCase = null) {
-    if (!target || execution.active) return;
+    if (restrictedDeployment || !target || execution.active) return;
     showPanel('debug');
     const { entries, targetId } = currentProject.current;
     let payload;
@@ -231,6 +234,24 @@ export function Workspace({ hidden, layout, onResize, showPanel, theme, toolbar,
 
   useEffect(() => { saveEditorPreferences(preferences); }, [preferences]);
   useEffect(() => {
+    if (!restrictedDeployment) return undefined;
+    const controller = new AbortController();
+    const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(5000)]);
+    fetch(backendUrl('/api/v1/capabilities/'), { signal, cache: 'no-store' })
+      .then((response) => {
+        if (!response.ok) throw new Error('Capabilities unavailable');
+        return response.json();
+      })
+      .then((data) => {
+        if (data?.execution?.available !== false || data?.analysis?.available !== false) {
+          throw new Error('Unexpected deployment capabilities');
+        }
+        if (!controller.signal.aborted) setServiceStatus('Restricted demo');
+      })
+      .catch(() => { if (!controller.signal.aborted) setServiceStatus('Service unavailable'); });
+    return () => controller.abort();
+  }, []);
+  useEffect(() => {
     if (hidden || loading) return undefined;
     const listener = (event) => handleShortcut(event);
     window.addEventListener('keydown', listener, true);
@@ -268,6 +289,7 @@ export function Workspace({ hidden, layout, onResize, showPanel, theme, toolbar,
         {...toolbar} theme={theme} layout={layout} showPreview={hidden}
         target={loading ? null : target} execution={execution} runTarget={() => runTarget()}
         canAnalyze={Boolean(canAnalyze)} analyzeActiveFile={analyzeActiveFile} analysisStatus={analysis.state?.status}
+        serviceStatus={restrictedDeployment ? serviceStatus : null}
       />
       {storageIssue && !hidden && <p className="workspace-save-alert" role="alert">{storageIssue}</p>}
       {loading ? (
@@ -294,7 +316,7 @@ export function Workspace({ hidden, layout, onResize, showPanel, theme, toolbar,
             />
             {splitter('debug')}
             <DebugPanel visible={layout.debug.visible} execution={execution} theme={theme} workspaceHidden={hidden}
-              target={target} runCase={runTarget} />
+              target={target} runCase={restrictedDeployment ? null : runTarget} />
           </div>
           {splitter('inspector')}
           <WorkspaceInspector

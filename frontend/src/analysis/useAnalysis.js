@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 
-const endpoint = 'http://127.0.0.1:8000/api/v1/analysis/';
+import { backendUrl } from '../backend.js';
+
 const sourceLimit = 64 * 1024;
 const encoder = new TextEncoder();
 
@@ -18,7 +19,7 @@ async function requestAnalysis(source, language, signal) {
   }
   let response;
   try {
-    response = await fetch(endpoint, {
+    response = await fetch(backendUrl('/api/v1/analysis/').href, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ source, language }),

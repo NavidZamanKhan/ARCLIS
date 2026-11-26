@@ -23,7 +23,7 @@ export function TestCases({ target, execution, runCase }) {
             {cases.map(({ name }, index) => <option key={name} value={index}>{name}</option>)}
           </select>
         </label>
-        <button type="button" onClick={() => runCase(fixture)} disabled={!target || execution.active}>Run case</button>
+        <button type="button" onClick={() => runCase(fixture)} disabled={!runCase || !target || execution.active}>Run case</button>
       </div>
       {testCase && (
         <div className="test-case-result" role="status" aria-label="Test case result">

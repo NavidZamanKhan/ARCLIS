@@ -79,9 +79,10 @@ function LayoutMenu({ showPreview, toggleView, resetLayout }) {
 export function WorkspaceToolbar({
   theme, changeTheme, layout, togglePanel, showPreview, toggleView, resetLayout,
   target, execution, runTarget,
-  canAnalyze, analyzeActiveFile, analysisStatus,
+  canAnalyze, analyzeActiveFile, analysisStatus, serviceStatus,
 }) {
   const ViewTitle = showPreview ? 'span' : 'h1';
+  const restricted = Boolean(serviceStatus);
 
   return (
     <header className="workspace-toolbar" aria-label="Workspace toolbar">
@@ -91,20 +92,23 @@ export function WorkspaceToolbar({
       </div>
       {(!showPreview || execution.active) && (
         <div className="execution-toolbar" aria-label="Source actions">
-          <Button icon={Play} aria-label="Run" title={target ? 'Run ' + target.entry_file : 'Select an execution target'}
-            aria-keyshortcuts="Control+Enter Meta+Enter" disabled={showPreview || !target || execution.active} onClick={runTarget} />
+          <Button icon={Play} aria-label="Run" title={restricted ? 'Execution is disabled in this demo'
+            : target ? 'Run ' + target.entry_file : 'Select an execution target'}
+            aria-keyshortcuts="Control+Enter Meta+Enter"
+            disabled={restricted || showPreview || !target || execution.active} onClick={runTarget} />
           <Button icon={Square} aria-label="Stop" title="Stop execution"
             aria-keyshortcuts="Control+Shift+Enter Meta+Shift+Enter"
             disabled={!execution.active || execution.run.state === 'CANCELLING'} onClick={execution.stop} />
           {!showPreview && (
-            <Button icon={ScanLine} aria-label="Analyze" title={analysisStatus === 'running' ? 'Analyzing source'
+            <Button icon={ScanLine} aria-label="Analyze" title={restricted ? 'Analysis is disabled in this demo'
+              : analysisStatus === 'running' ? 'Analyzing source'
               : canAnalyze ? 'Analyze the active file' : 'Analysis is available for C and Python files'}
               disabled={!canAnalyze} onClick={analyzeActiveFile}>Analyze</Button>
           )}
           <span
             className="execution-status" role="status" aria-label="Execution status"
             data-state={execution.failed ? 'failed' : execution.active ? 'active' : 'idle'}
-          >{execution.label}</span>
+          >{serviceStatus ?? execution.label}</span>
         </div>
       )}
       <div className="workspace-toolbar-actions">

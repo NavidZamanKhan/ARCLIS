@@ -1,0 +1,97 @@
+name: arclis-demo
+
+x-service-defaults: &service-defaults
+  init: true
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  restart: unless-stopped
+  memswap_limit: 256m
+  mem_limit: 256m
+  cpus: 1.0
+  pids_limit: 64
+  logging:
+    driver: json-file
+    options:
+      max-size: 5m
+      max-file: "3"
+
+services:
+  backend:
+    <<: *service-defaults
+    build:
+      context: ..
+      dockerfile: deployment/Dockerfile
+      target: backend
+    command:
+      - python
+      - -m
+      - uvicorn
+      - config.asgi:application
+      - --host=0.0.0.0
+      - --port=8000
+      - --workers=1
+      - --no-proxy-headers
+      - --no-access-log
+      - --ws=websockets-sansio
+      - --ws-max-size=24576
+      - --ws-max-queue=16
+      - --limit-concurrency=64
+    environment:
+      ARCLIS_RESTRICTED_DEPLOYMENT: "1"
+      DJANGO_ALLOWED_HOSTS: localhost
+      DJANGO_FRONTEND_ORIGINS: https://localhost:8443
+      DJANGO_SECRET_KEY_FILE: /run/secrets/django_key
+      DJANGO_SQLITE_PATH: ":memory:"
+    secrets: [django_key]
+    tmpfs: ["/tmp:size=16m,mode=1777,noexec,nosuid,nodev"]
+    networks: [app]
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - >-
+          from urllib.request import Request, urlopen;
+          import json;
+          request = Request('http://127.0.0.1:8000/api/v1/health/', headers={'Host': 'localhost:8443', 'X-Forwarded-Proto': 'https'});
+          assert json.load(urlopen(request, timeout=2)) == {'status': 'ok'}
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
+  edge:
+    <<: *service-defaults
+    build:
+      context: ..
+      dockerfile: deployment/Dockerfile
+      target: edge
+    depends_on:
+      backend:
+        condition: service_healthy
+        restart: true
+    ports:
+      - "127.0.0.1:8080:8080"
+      - "127.0.0.1:8443:8443"
+    secrets: [tls_cert, tls_key]
+    tmpfs: ["/tmp:size=48m,mode=1777,noexec,nosuid,nodev"]
+    networks: [app, ingress]
+    healthcheck:
+      test: [CMD, wget, -q, -O, /dev/null, http://127.0.0.1:8081/]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+networks:
+  app:
+    internal: true
+  ingress:
+
+secrets:
+  django_key:
+    file: ${ARCLIS_DEPLOY_SECRETS_DIR:?Set the private deployment secrets directory}/django.key
+  tls_cert:
+    file: ${ARCLIS_DEPLOY_SECRETS_DIR:?Set the private deployment secrets directory}/localhost.crt
+  tls_key:
+    file: ${ARCLIS_DEPLOY_SECRETS_DIR:?Set the private deployment secrets directory}/localhost.key

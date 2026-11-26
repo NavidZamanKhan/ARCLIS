@@ -9,6 +9,13 @@ async def close_unrouted_websocket(scope, receive, send):
         await send({"type": "websocket.close", "code": 4404})
 
 
+async def websocket_health(scope, receive, send):
+    if (await receive())["type"] == "websocket.connect":
+        await send({"type": "websocket.accept"})
+        await send({"type": "websocket.send", "text": '{"status":"ok"}'})
+        await send({"type": "websocket.close", "code": 1000})
+
+
 def build_websocket_application(routes=None):
     if routes is None:
         from apps.execution.consumer import ExecutionConsumer
@@ -19,5 +26,7 @@ def build_websocket_application(routes=None):
                 ExecutionConsumer.as_asgi(),
             )
         ]
+        if settings.RESTRICTED_DEPLOYMENT:
+            routes.append(re_path(r"^ws/health/$", websocket_health))
     router = URLRouter([*routes, re_path(r"^", close_unrouted_websocket)])
     return OriginValidator(router, settings.FRONTEND_ORIGINS)

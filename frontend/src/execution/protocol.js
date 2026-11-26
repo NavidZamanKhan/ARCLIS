@@ -1,5 +1,5 @@
-const origin = 'http://127.0.0.1:8000';
-const endpoint = origin + '/api/v1/executions/';
+import { backendUrl } from '../backend.js';
+
 const subprotocol = 'arclis.v1';
 const encoder = new TextEncoder();
 
@@ -55,8 +55,8 @@ function address(session) {
     || session.websocket_path !== '/ws/executions/' + session.id + '/') {
     throw new Error('The local server returned an invalid session.');
   }
-  const url = new URL(session.websocket_path, origin);
-  url.protocol = 'ws:';
+  const url = backendUrl(session.websocket_path);
+  url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
   return url.href;
 }
 
@@ -131,7 +131,7 @@ export function createExecutionClient(onEvent, { request = globalThis.fetch, Soc
       return;
     }
     try {
-      const response = await request(endpoint, {
+      const response = await request(backendUrl('/api/v1/executions/').href, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body,
         signal: attempt.abort.signal, credentials: 'omit', redirect: 'error', cache: 'no-store',
       });
