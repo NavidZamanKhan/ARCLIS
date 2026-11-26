@@ -1,7 +1,7 @@
 from collections.abc import Sequence
 
 from .sandbox import SandboxLimits, Toolchain
-from .worker import ExecutionResult, run_compiled_job
+from .worker import CompiledJob, ExecutionResult
 from .workspace import InvalidWorkspace, SourceFile, validate_workspace
 
 _SYNTAX_CHECK = """
@@ -21,6 +21,10 @@ def run_python(
     limits: SandboxLimits = SandboxLimits(),
 ) -> ExecutionResult:
     """Syntax-check submitted Python files, then execute the selected script."""
+    return prepare_python(entry_file, files, limits=limits).run(stdin=stdin)
+
+
+def prepare_python(entry_file, files, *, limits=SandboxLimits()):
     workspace = validate_workspace(files)
     if any(path.suffix != ".py" for path in workspace):
         raise InvalidWorkspace("Submit only .py files for the Python adapter.")
@@ -36,6 +40,4 @@ def run_python(
         "/usr/bin/env", "-i", "PATH=/usr/bin:/bin", "PYTHONPATH=/workspace",
         "/usr/bin/python3", "-S", "-B", f"/workspace/{entry_file}",
     )
-    return run_compiled_job(
-        workspace, Toolchain.PYTHON, compiler, program, stdin=stdin, limits=limits,
-    )
+    return CompiledJob(workspace, Toolchain.PYTHON, compiler, program, limits)

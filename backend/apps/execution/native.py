@@ -2,7 +2,7 @@ from collections.abc import Sequence
 from enum import StrEnum
 
 from .sandbox import SandboxLimits, Toolchain
-from .worker import ExecutionResult, run_compiled_job
+from .worker import CompiledJob, ExecutionResult
 from .workspace import InvalidWorkspace, SourceFile, validate_workspace
 
 _COMPILERS = {
@@ -27,6 +27,10 @@ def run_native(
     limits: SandboxLimits = SandboxLimits(),
 ) -> ExecutionResult:
     """Compile and run one validated C or C++ program within the local worker."""
+    return prepare_native(language, files, limits=limits).run(stdin=stdin)
+
+
+def prepare_native(language, files, *, limits=SandboxLimits(), entry_file=None):
     if not isinstance(language, NativeLanguage):
         raise ValueError("Supply a C or C++ language.")
 
@@ -40,11 +44,11 @@ def run_native(
             raise InvalidWorkspace("All files must be sources or headers for the chosen language.")
     if not sources:
         raise InvalidWorkspace("Supply at least one translation unit for the chosen language.")
+    if entry_file is not None and f"/workspace/{entry_file}" not in sources:
+        raise InvalidWorkspace("The entry file must match a submitted translation unit.")
 
     command = (
         compiler, standard, "-fdiagnostics-color=never", "-I", "/workspace",
         "-o", "/tmp/arclis-program", *sorted(sources),
     )
-    return run_compiled_job(
-        workspace, Toolchain.C_CPP, command, ("/tmp/arclis-program",), stdin=stdin, limits=limits,
-    )
+    return CompiledJob(workspace, Toolchain.C_CPP, command, ("/tmp/arclis-program",), limits)

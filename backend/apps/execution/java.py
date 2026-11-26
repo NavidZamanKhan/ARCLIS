@@ -3,7 +3,7 @@ from collections.abc import Sequence
 from pathlib import PurePosixPath
 
 from .sandbox import SandboxLimits, Toolchain
-from .worker import ExecutionResult, run_compiled_job
+from .worker import CompiledJob, ExecutionResult
 from .workspace import InvalidWorkspace, SourceFile, validate_workspace
 
 _IDENTIFIER = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
@@ -18,6 +18,10 @@ def run_java(
     limits: SandboxLimits = SandboxLimits(memory_mib=384),
 ) -> ExecutionResult:
     """Execute a Java program using its conventional package and class path."""
+    return prepare_java(main_class, files, limits=limits).run(stdin=stdin)
+
+
+def prepare_java(main_class, files, *, limits=SandboxLimits(memory_mib=384), entry_file=None):
     if not isinstance(main_class, str) or not all(
         _IDENTIFIER.fullmatch(part) for part in main_class.split(".")
     ):
@@ -27,6 +31,8 @@ def run_java(
 
     workspace = validate_workspace(files)
     main_path = PurePosixPath(*main_class.split(".")).with_suffix(".java")
+    if entry_file is not None and entry_file != str(main_path):
+        raise InvalidWorkspace("The entry file must match the Java main class.")
     if main_path not in workspace:
         raise InvalidWorkspace("The main class must match a submitted Java source path.")
     for path in workspace:
@@ -45,6 +51,4 @@ def run_java(
         *(f"/workspace/{path}" for path in sorted(workspace)),
     )
     program = ("java", *vm_args, "-cp", "/tmp", main_class)
-    return run_compiled_job(
-        workspace, Toolchain.JAVA, compiler, program, stdin=stdin, limits=limits,
-    )
+    return CompiledJob(workspace, Toolchain.JAVA, compiler, program, limits)

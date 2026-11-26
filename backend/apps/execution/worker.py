@@ -1,6 +1,6 @@
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from tempfile import TemporaryDirectory
 from uuid import uuid4
 
@@ -26,6 +26,21 @@ class ExecutionResult:
     history: tuple[ExecutionState, ...]
     outcome: SandboxOutcome
     compiler_diagnostics: bytes = b""
+
+
+@dataclass(frozen=True)
+class CompiledJob:
+    workspace: dict[PurePosixPath, bytes]
+    toolchain: Toolchain
+    compiler: tuple[str, ...]
+    program: tuple[str, ...]
+    limits: SandboxLimits
+
+    def run(self, *, stdin=b""):
+        return run_compiled_job(
+            self.workspace, self.toolchain, self.compiler, self.program,
+            stdin=stdin, limits=self.limits,
+        )
 
 
 def run_job(
