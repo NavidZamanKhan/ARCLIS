@@ -66,6 +66,6 @@ class ExecutionSession:
 
     def transition(self, state: ExecutionState):
         current = self._history[-1]
-        if state not in _TRANSITIONS.get(current, ()):
+        if not isinstance(state, ExecutionState) or state not in _TRANSITIONS.get(current, ()):
             raise ValueError(f"Invalid execution transition from {current} to {state}.")
         self._history.append(state)

@@ -60,3 +60,50 @@ Uvicorn serves the Django HTTP application and routes WebSocket handshakes
 through the configured origin allowlist. Every unregistered WebSocket path is
 rejected during the handshake. The WebSocket test fixture is defined only in
 the test suite. Interactive execution routes will be added in their own stage.
+
+## Local execution worker
+
+S03 provides a synchronous internal worker for trusted toolchain adapters and
+fixtures. Use it from Ubuntu under WSL 2 or Linux with a local rootless Docker
+Engine, builtin seccomp, and systemd cgroup v2 CPU, memory, swap, and PID
+controllers. The worker connects to the current Linux user's rootless Unix
+socket. Web execution remains unavailable until the execution integration stages.
+
+Build the three images from the repository root:
+
+```bash
+(
+  set -e
+  for target in c-cpp java python; do
+    docker build --file docker/toolchains.Dockerfile --target "$target" \
+      --tag "arclis-toolchain-$target:s03" docker
+  done
+)
+```
+
+The base image is pinned by digest. Toolchain packages come from Ubuntu's
+signed repositories. The worker uses the local images during jobs.
+
+Each job stages up to 50 UTF-8 source files totaling 1 MiB. Paths are relative
+POSIX paths with ASCII letters, digits, underscores, hyphens, and periods in
+their segments and a supported source or header extension. Input is mounted
+read-only. The writable scratch area is a size-limited tmpfs. Jobs run as
+UID/GID 65534 with no network, no capabilities, no privilege escalation, and
+a read-only root filesystem. The Docker socket stays with the orchestrator.
+
+Default per-job limits are one CPU, 256 MiB RAM with zero swap, 64 processes,
+32 MiB of scratch space, 256 KiB of combined output, and 15 seconds for
+execution and output capture. The worker reports that elapsed interval, in
+milliseconds. Workspace preparation and Docker cleanup are outside that
+interval. A local operator should investigate any reported cleanup
+failure using the job ID and the container label `org.arclis.worker=local`.
+
+After loading the development environment as above, run the Docker integration
+tests with:
+
+```bash
+(cd backend && ARCLIS_TEST_WORKER=1 python manage.py test)
+```
+
+These tests use controlled fixtures. Public anonymous execution and production
+isolation verification are separate blueprint milestones.

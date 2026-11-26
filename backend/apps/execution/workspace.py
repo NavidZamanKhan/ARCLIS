@@ -26,6 +26,8 @@ def validate_workspace(files: Sequence[SourceFile]) -> dict[PurePosixPath, bytes
     staged = {}
     total_bytes = 0
     for source in files:
+        if not isinstance(source, SourceFile):
+            raise InvalidWorkspace("Supply source files with a path and text content.")
         raw_path = source.path
         if not isinstance(raw_path, str) or len(raw_path) > 240 or any(
             not _SEGMENT.fullmatch(part) or part.endswith(".")
