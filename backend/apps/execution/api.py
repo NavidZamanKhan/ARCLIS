@@ -19,7 +19,11 @@ MAX_JSON_BYTES = 2 * 1024 * 1024
 
 
 def local_execution_allowed(address):
-    if not settings.LOCAL_EXECUTION_ENABLED or not address:
+    return settings.LOCAL_EXECUTION_ENABLED and is_loopback(address)
+
+
+def is_loopback(address):
+    if not address:
         return False
     try:
         return ip_address(address).is_loopback
@@ -34,10 +38,14 @@ class RequestTooLarge(APIException):
 
 
 class BoundedJSONParser(JSONParser):
+    max_bytes = None
+    limit_detail = RequestTooLarge.default_detail
+
     def parse(self, stream, media_type=None, parser_context=None):
-        data = stream.read(MAX_JSON_BYTES + 1)
-        if len(data) > MAX_JSON_BYTES:
-            raise RequestTooLarge()
+        limit = MAX_JSON_BYTES if self.max_bytes is None else self.max_bytes
+        data = stream.read(limit + 1)
+        if len(data) > limit:
+            raise RequestTooLarge(self.limit_detail)
         try:
             return super().parse(BytesIO(data), media_type, parser_context)
         except RecursionError as error:

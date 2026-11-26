@@ -30,7 +30,7 @@ urlpatterns = [
 ]
 
 
-@override_settings(LOCAL_EXECUTION_ENABLED=False)
+@override_settings(LOCAL_EXECUTION_ENABLED=False, LOCAL_ANALYSIS_ENABLED=False)
 class CapabilitiesTests(SimpleTestCase):
     def test_capabilities_report_current_availability(self):
         response = self.client.get(reverse("capabilities"))

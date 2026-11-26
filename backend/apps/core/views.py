@@ -3,6 +3,7 @@ from django.views.decorators.http import require_safe
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
+from apps.analysis.api import local_analysis_allowed
 from apps.execution.api import local_execution_allowed
 
 
@@ -13,11 +14,12 @@ def health(request):
 
 @api_view(["GET"])
 def capabilities(request):
-    available = local_execution_allowed(request.META.get("REMOTE_ADDR"))
+    address = request.META.get("REMOTE_ADDR")
+    available = local_execution_allowed(address)
     return Response(
         {
             "languages": ["c", "cpp", "java", "python"],
             "execution": {"available": available, "interactive": available},
-            "analysis": {"available": False},
+            "analysis": {"available": local_analysis_allowed(address)},
         }
     )

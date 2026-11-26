@@ -9,6 +9,7 @@ from .origins import parse_frontend_origins
 BASE_DIR = Path(__file__).resolve().parent.parent
 DEBUG = os.environ.get("DJANGO_DEBUG") == "1"
 LOCAL_EXECUTION_ENABLED = DEBUG and os.environ.get("ARCLIS_ENABLE_LOCAL_EXECUTION") == "1"
+LOCAL_ANALYSIS_ENABLED = DEBUG and os.environ.get("ARCLIS_ENABLE_LOCAL_ANALYSIS") == "1"
 SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "")
 if not SECRET_KEY:
     if not DEBUG:

@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 from time import monotonic
+from typing import ClassVar
 
 from .interaction import EOF, MAX_EVENT_CHUNK, MAX_RUNTIME_SECONDS, POLL_SECONDS
 from .states import ExecutionState
@@ -24,16 +25,19 @@ class SandboxError(RuntimeError):
 
 class Toolchain(StrEnum):
     C_CPP = "c-cpp"
+    C_ANALYZER = "c-analyzer"
     JAVA = "java"
     PYTHON = "python"
 
     @property
     def image(self):
-        return f"arclis-toolchain-{self.value}:s06"
+        version = "s18" if self is Toolchain.C_ANALYZER else "s06"
+        return f"arclis-toolchain-{self.value}:{version}"
 
 
 @dataclass(frozen=True)
 class SandboxLimits:
+    MAX_OUTPUT_BYTES: ClassVar[int] = 256 * 1024
     cpu_millis: int = 1000
     memory_mib: int = 256
     processes: int = 64
@@ -47,7 +51,7 @@ class SandboxLimits:
             ("memory_mib", 32, 512),
             ("processes", 8, 64),
             ("scratch_mib", 1, 64),
-            ("output_bytes", 1, 256 * 1024),
+            ("output_bytes", 1, self.MAX_OUTPUT_BYTES),
         ):
             value = getattr(self, name)
             if type(value) is not int or not minimum <= value <= maximum:
