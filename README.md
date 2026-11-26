@@ -63,7 +63,7 @@ the test suite. Interactive execution routes will be added in their own stage.
 
 ## Local execution worker
 
-S03 provides a synchronous internal worker for trusted toolchain adapters and
+The synchronous internal worker supports trusted toolchain adapters and
 fixtures. Use it from Ubuntu under WSL 2 or Linux with a local rootless Docker
 Engine, builtin seccomp, and systemd cgroup v2 CPU, memory, swap, and PID
 controllers. The worker connects to the current Linux user's rootless Unix
@@ -74,7 +74,9 @@ Build the three images from the repository root:
 ```bash
 (
   set -e
-  for target in c-cpp java python; do
+  docker build --file docker/toolchains.Dockerfile --target c-cpp \
+    --tag arclis-toolchain-c-cpp:s04 docker
+  for target in java python; do
     docker build --file docker/toolchains.Dockerfile --target "$target" \
       --tag "arclis-toolchain-$target:s03" docker
   done
@@ -93,7 +95,7 @@ a read-only root filesystem. The Docker socket stays with the orchestrator.
 
 Default per-job limits are one CPU, 256 MiB RAM with zero swap, 64 processes,
 32 MiB of scratch space, 256 KiB of combined output, and 15 seconds for
-execution and output capture. The worker reports that elapsed interval, in
+compilation, execution, and output capture. The worker reports that elapsed interval, in
 milliseconds. Workspace preparation and Docker cleanup are outside that
 interval. A local operator should investigate any reported cleanup
 failure using the job ID and the container label `org.arclis.worker=local`.
@@ -107,3 +109,23 @@ tests with:
 
 These tests use controlled fixtures. Public anonymous execution and production
 isolation verification are separate blueprint milestones.
+
+### C and C++ adapters
+
+Back-end callers use `apps.execution.native.run_native` with
+`NativeLanguage.C` or `NativeLanguage.CPP`, a sequence of `SourceFile` objects,
+and optional `stdin` bytes. Buffered stdin accepts up to 64 KiB and ends at EOF.
+
+The C adapter builds all submitted `.c` files with GCC in C17 mode and accepts
+`.h` headers. The C++ adapter builds all `.cc`, `.cpp`, and `.cxx` files with
+G++ in C++17 mode and accepts `.h`, `.hh`, `.hpp`, and `.hxx` headers.
+Extensions are case-sensitive. Supply at least one translation unit and one
+entry point across the selected sources. Includes can resolve relative to
+each source or to the workspace root.
+
+Compiler and linker diagnostics are returned as bytes in
+`ExecutionResult.compiler_diagnostics`. Program stdout, stderr, and exit code
+are in `ExecutionResult.outcome`. Diagnostics and both output streams share one
+byte budget. Compiler failure has state `COMPILATION_FAILED` and no program
+exit code. A running program that returns a nonzero exit has state
+`RUNTIME_FAILED` and preserves its exit code.

@@ -1,10 +1,18 @@
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from uuid import uuid4
 
-from .sandbox import DockerSandbox, SandboxError, SandboxLimits, SandboxOutcome, Toolchain
+from .sandbox import (
+    COMPILER_FRAME,
+    DockerSandbox,
+    SandboxError,
+    SandboxLimits,
+    SandboxOutcome,
+    Toolchain,
+    compiler_header,
+)
 from .states import ExecutionSession, ExecutionState
 from .workspace import SourceFile, materialize_workspace, validate_workspace
 
@@ -16,6 +24,7 @@ class ExecutionResult:
     job_id: str
     history: tuple[ExecutionState, ...]
     outcome: SandboxOutcome
+    compiler_diagnostics: bytes = b""
 
 
 def run_job(
@@ -34,23 +43,37 @@ def run_job(
         or any(not isinstance(arg, str) or "\0" in arg for arg in argv)
     ):
         raise ValueError("Supply a toolchain, validated limits, and trusted command arguments.")
-    validated = validate_workspace(files)
+    return _run_job(validate_workspace(files), toolchain, argv, limits)
+
+
+def _run_job(validated, toolchain, argv, limits, *, native_stdin=None):
     job_id = uuid4().hex
     name = f"arclis-job-{job_id}"
     session = ExecutionSession()
     session.transition(ExecutionState.PREPARING)
+    diagnostics = b""
 
     try:
         with TemporaryDirectory(prefix=f"{WORKSPACE_PREFIX}{job_id}-", dir="/tmp") as temporary:
             root = Path(temporary)
             workspace = root / "input"
             materialize_workspace(workspace, validated)
+            if native_stdin is not None:
+                input_file = workspace / ".arclis-stdin"
+                input_file.write_bytes(native_stdin)
+                input_file.chmod(0o644)
             sandbox = DockerSandbox(root / "docker")
             sandbox.verify()
             try:
                 sandbox.create(name, workspace, toolchain, argv, limits)
-                session.transition(ExecutionState.RUNNING)
-                outcome = sandbox.execute(name, limits)
+                if native_stdin is None:
+                    session.transition(ExecutionState.RUNNING)
+                    outcome = sandbox.execute(name, limits)
+                else:
+                    session.transition(ExecutionState.COMPILING)
+                    outcome, diagnostics = _native_outcome(
+                        session, sandbox.execute(name, limits, compiler_frame=True)
+                    )
             finally:
                 sandbox.remove(name)
     except SandboxError as error:
@@ -62,4 +85,38 @@ def run_job(
         )
 
     session.transition(outcome.state)
-    return ExecutionResult(job_id, session.history, outcome)
+    return ExecutionResult(job_id, session.history, outcome, diagnostics)
+
+
+def _native_outcome(session, outcome):
+    output = outcome.stdout
+    interrupted = outcome.state in (
+        ExecutionState.TIMEOUT,
+        ExecutionState.RESOURCE_LIMIT_EXCEEDED,
+    )
+    if len(output) < COMPILER_FRAME.size:
+        if interrupted:
+            return replace(outcome, stdout=b"", stderr=b""), b""
+        raise SandboxError("The native launcher did not return a compiler record.")
+
+    phase, length = compiler_header(output)
+    end = COMPILER_FRAME.size + length
+    if len(output) < end:
+        if interrupted:
+            return replace(outcome, stdout=b"", stderr=b""), output[COMPILER_FRAME.size:]
+        raise SandboxError("The native launcher returned incomplete compiler diagnostics.")
+
+    diagnostics = output[COMPILER_FRAME.size:end]
+    if phase == 0:
+        session.transition(ExecutionState.RUNNING)
+        return replace(outcome, stdout=output[end:]), diagnostics
+
+    if not interrupted:
+        if outcome.state is not ExecutionState.RUNTIME_FAILED or outcome.exit_code != 1:
+            raise SandboxError("The native launcher did not confirm compilation failure.")
+        state = (
+            ExecutionState.COMPILATION_FAILED if phase == 1
+            else ExecutionState.RESOURCE_LIMIT_EXCEEDED
+        )
+        outcome = replace(outcome, state=state)
+    return replace(outcome, stdout=b"", stderr=b"", exit_code=None), diagnostics

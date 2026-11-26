@@ -1,6 +1,7 @@
 import json
 import os
 import selectors
+import struct
 import subprocess
 from dataclasses import dataclass
 from enum import StrEnum
@@ -13,6 +14,7 @@ CONTAINER_LABEL = "org.arclis.worker=local"
 _DOCKER_ENVIRONMENT = {"PATH": os.defpath, "LANG": "C"}
 _CONTROL_TIMEOUT = 15
 _REQUIRED_LIMITS = ("MemoryLimit", "SwapLimit", "CpuCfsPeriod", "CpuCfsQuota", "PidsLimit")
+COMPILER_FRAME = struct.Struct(">4sBI")
 
 
 class SandboxError(RuntimeError):
@@ -26,7 +28,8 @@ class Toolchain(StrEnum):
 
     @property
     def image(self):
-        return f"arclis-toolchain-{self.value}:s03"
+        tag = "s04" if self is Toolchain.C_CPP else "s03"
+        return f"arclis-toolchain-{self.value}:{tag}"
 
 
 @dataclass(frozen=True)
@@ -147,7 +150,7 @@ class DockerSandbox:
         if result.returncode:
             raise SandboxError("Docker could not create the worker. Check the local toolchain image.")
 
-    def execute(self, name, limits):
+    def execute(self, name, limits, *, compiler_frame=False):
         started = monotonic()
         with subprocess.Popen(
             (*self._docker, "start", "--attach", name),
@@ -160,6 +163,7 @@ class DockerSandbox:
                 streams = [bytearray(), bytearray()]
                 code, early = _read_output(
                     attached, streams, limits.output_bytes, started + limits.timeout_seconds,
+                    compiler_frame=compiler_frame,
                 )
             finally:
                 if attached.poll() is None:
@@ -195,10 +199,21 @@ class DockerSandbox:
             raise SandboxError("Docker did not confirm cleanup of the job container.")
 
 
-def _read_output(attached, streams, cap, deadline):
+def compiler_header(output):
+    magic, phase, size = COMPILER_FRAME.unpack_from(output)
+    if magic != b"ARC1" or phase not in (0, 1, 2):
+        raise SandboxError("The native launcher returned an invalid compiler record.")
+    return phase, size
+
+
+def _read_output(attached, streams, cap, deadline, *, compiler_frame=False):
     remaining_bytes = cap
     with selectors.DefaultSelector() as selector:
         selector.register(attached.stdout, selectors.EVENT_READ, streams[0])
+        if compiler_frame:
+            if not _read_compiler_frame(selector, streams[0], cap, deadline):
+                return None, ExecutionState.TIMEOUT
+            remaining_bytes -= max(0, len(streams[0]) - COMPILER_FRAME.size)
         selector.register(attached.stderr, selectors.EVENT_READ, streams[1])
         while selector.get_map():
             remaining_time = deadline - monotonic()
@@ -217,3 +232,28 @@ def _read_output(attached, streams, cap, deadline):
         return attached.wait(timeout=max(0, deadline - monotonic())), None
     except subprocess.TimeoutExpired:
         return None, ExecutionState.TIMEOUT
+
+
+def _read_compiler_frame(selector, output, cap, deadline):
+    # The launcher writes its record to stdout before it can start the program.
+    # Consume that record before charging runtime stderr to the shared budget.
+    target = COMPILER_FRAME.size
+    while len(output) < target:
+        remaining = deadline - monotonic()
+        if remaining <= 0:
+            return False
+        events = selector.select(remaining)
+        if not events:
+            return False
+        key, _ = events[0]
+        chunk = os.read(key.fd, target - len(output))
+        if not chunk:
+            selector.unregister(key.fileobj)
+            return True
+        output.extend(chunk)
+        if target == COMPILER_FRAME.size and len(output) == target:
+            _, size = compiler_header(output)
+            if size > cap:
+                raise SandboxError("The native launcher exceeded its diagnostic budget.")
+            target += size
+    return True
