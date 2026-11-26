@@ -8,9 +8,10 @@ from rest_framework.response import Response
 
 from apps.execution.api import BoundedJSONParser, TextField, is_loopback
 
-from .service import MAX_SOURCE_BYTES, AnalysisLimit, AnalysisUnavailable, analyze_c
+from .service import MAX_SOURCE_BYTES, AnalysisLimit, AnalysisUnavailable, analyze_c, analyze_python
 
 _slot = BoundedSemaphore(1)
+ANALYSIS_LANGUAGES = ("c", "python")
 
 
 def local_analysis_allowed(address):
@@ -23,6 +24,7 @@ class AnalysisJSONParser(BoundedJSONParser):
 
 
 class AnalysisRequestSerializer(serializers.Serializer):
+    language = serializers.ChoiceField(choices=ANALYSIS_LANGUAGES, default="c")
     source = TextField(max_length=MAX_SOURCE_BYTES, allow_blank=True, trim_whitespace=False)
 
     def validate(self, attrs):
@@ -32,7 +34,7 @@ class AnalysisRequestSerializer(serializers.Serializer):
             raise serializers.ValidationError({"source": "Source must be valid UTF-8."}) from error
         if size > MAX_SOURCE_BYTES:
             raise serializers.ValidationError({"source": "Source is limited to 64 KiB of UTF-8."})
-        return {"content": attrs["source"], "source_size": size}
+        return {"content": attrs["source"], "source_size": size, "language": attrs["language"]}
 
 
 class AnalysisLimitError(APIException):
@@ -56,8 +58,10 @@ def analyze_source(request):
     serializer.is_valid(raise_exception=True)
     if not _slot.acquire(blocking=False):
         raise Throttled(detail="The analyzer is busy. Try again shortly.")
+    args = serializer.validated_data
+    analyzer = analyze_python if args["language"] == "python" else analyze_c
     try:
-        report = analyze_c(**serializer.validated_data)
+        report = analyzer(content=args["content"], source_size=args["source_size"])
     except AnalysisLimit as error:
         raise AnalysisLimitError(str(error)) from error
     except AnalysisUnavailable as error:

@@ -20,6 +20,7 @@ COMMAND = (
     'if [ "$status" -gt 1 ]; then exit "$status"; fi; '
     'exec /opt/arclis/arclis-parse --analysis /workspace/input.c',
 )
+PYTHON_COMMAND = ("python3", "-I", "-B", "/opt/arclis/python_analysis.py")
 _TOKENS = {"keyword", "identifier", "integer", "floating", "character", "string",
            "operator", "delimiter", "include", "eof"}
 _DIAGNOSTIC_PHASES = {"lexical", "syntax", "semantic"}
@@ -148,8 +149,8 @@ def _collect_report(output, source_size, exit_code):
     }
 
 
-def analyze_c(content, source_size):
-    result = run_job([SourceFile("input.c", content)], Toolchain.C_ANALYZER, COMMAND, LIMITS)
+def _run_analyzer(content, path, toolchain, command):
+    result = run_job([SourceFile(path, content)], toolchain, command, LIMITS)
     outcome = result.outcome
     if outcome.state is ExecutionState.RESOURCE_LIMIT_EXCEEDED:
         raise AnalysisLimit("The analyzer reached its resource or output limit.")
@@ -157,7 +158,50 @@ def analyze_c(content, source_size):
         raise AnalysisLimit("The analyzer reached its time limit.")
     if outcome.state not in (ExecutionState.COMPLETED, ExecutionState.RUNTIME_FAILED) or outcome.stderr:
         raise AnalysisUnavailable("The analyzer worker did not complete.")
+    return outcome
+
+
+def analyze_c(content, source_size):
+    outcome = _run_analyzer(content, "input.c", Toolchain.C_ANALYZER, COMMAND)
     try:
         return _collect_report(outcome.stdout, source_size, outcome.exit_code)
     except (AttributeError, KeyError, TypeError, ValueError, RecursionError) as error:
         raise AnalysisUnavailable("The analyzer returned an invalid report.") from error
+
+
+def _collect_python_report(output, source_size, exit_code):
+    report = json.loads(output)
+    if exit_code == 2 and report == {"limit": True}:
+        raise AnalysisLimit("The source exceeds the Python analyzer's AST size or nesting limits.")
+    syntax, semantic = report["syntax_valid"], report["semantic_valid"]
+    if (type(syntax) is not bool or (type(semantic) is not bool if syntax else semantic is not None)
+            or report["ir"] is not None or exit_code != (0 if semantic is True else 1)):
+        raise ValueError("Inconsistent Python analysis results")
+    ast = report["ast"]
+    if syntax:
+        if ast["kind"] != "Module" or _offsets(ast, source_size) != (0, source_size):
+            raise ValueError("Invalid Python AST root")
+    elif ast is not None:
+        raise ValueError("Unexpected Python AST")
+    tokens = _located_array(report, "tokens", source_size)
+    for item in tokens:
+        if not all(isinstance(item.get(field), str) for field in ("kind", "exact_kind", "lexeme")):
+            raise ValueError("Invalid Python token")
+    if syntax and (not tokens or tokens[-1]["kind"] != "endmarker" or _offsets(tokens[-1], source_size) != (source_size, source_size)):
+        raise ValueError("Missing Python end marker")
+    diagnostics = _located_array(report, "diagnostics", source_size)
+    for item in diagnostics:
+        _diagnostic(item, source_size)
+    if bool(diagnostics) == (semantic is True):
+        raise ValueError("Inconsistent Python diagnostics")
+    return {"syntax_valid": syntax, "semantic_valid": semantic, "tokens": tokens, "ast": ast, "ir": None,
+            "scopes": _located_array(report, "scopes", source_size),
+            "symbols": _located_array(report, "symbols", source_size), "diagnostics": diagnostics}
+
+
+def analyze_python(content, source_size):
+    outcome = _run_analyzer(content, "input.py", Toolchain.PYTHON_ANALYZER, PYTHON_COMMAND)
+    try:
+        return _collect_python_report(outcome.stdout, source_size, outcome.exit_code)
+    except (AttributeError, KeyError, TypeError, ValueError, RecursionError) as error:
+        raise AnalysisUnavailable("The Python analyzer returned an invalid report.") from error

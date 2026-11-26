@@ -28,10 +28,11 @@ class Toolchain(StrEnum):
     C_ANALYZER = "c-analyzer"
     JAVA = "java"
     PYTHON = "python"
+    PYTHON_ANALYZER = "python-analyzer"
 
     @property
     def image(self):
-        version = "s18" if self is Toolchain.C_ANALYZER else "s06"
+        version = {Toolchain.C_ANALYZER: "s18", Toolchain.PYTHON_ANALYZER: "s19"}.get(self, "s06")
         return f"arclis-toolchain-{self.value}:{version}"
 
 

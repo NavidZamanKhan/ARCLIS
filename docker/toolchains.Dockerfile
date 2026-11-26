@@ -25,3 +25,6 @@ RUN apt-get update \
 RUN install -d -m 0755 /opt/arclis
 COPY --chmod=0444 native_job.py /opt/arclis/native_job.py
 USER 65534:65534
+
+FROM python AS python-analyzer
+COPY --chmod=0444 python_analysis.py /opt/arclis/python_analysis.py

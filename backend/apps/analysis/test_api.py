@@ -12,12 +12,15 @@ from apps.execution.states import ExecutionState
 from apps.execution.workspace import SourceFile
 
 from .api import AnalysisJSONParser, _slot
-from .service import COMMAND, LIMITS, AnalysisLimit
+from .service import COMMAND, LIMITS, PYTHON_COMMAND, AnalysisLimit
 
 
 class AnalysisRequests(SimpleTestCase):
-    def post(self, source, **headers):
-        return self.client.post(reverse("analyze_source"), {"source": source}, content_type="application/json", **headers)
+    def post(self, source, *, language=None, **headers):
+        payload = {"source": source}
+        if language is not None:
+            payload["language"] = language
+        return self.client.post(reverse("analyze_source"), payload, content_type="application/json", **headers)
 
 
 @override_settings(LOCAL_ANALYSIS_ENABLED=True, LOCAL_EXECUTION_ENABLED=False,
@@ -25,7 +28,7 @@ class AnalysisRequests(SimpleTestCase):
 class AnalysisApiTests(AnalysisRequests):
     def test_capability_and_access_use_loopback_and_analysis_opt_in(self):
         flags = self.client.get(reverse("capabilities")).json()
-        self.assertEqual(flags["analysis"], {"available": True})
+        self.assertEqual(flags["analysis"], {"available": True, "languages": ["c", "python"]})
         self.assertFalse(flags["execution"]["available"])
         self.assertFalse(self.client.get(reverse("capabilities"), REMOTE_ADDR="192.0.2.1").json()["analysis"]["available"])
         with patch("apps.analysis.api.analyze_c") as analyze:
@@ -53,6 +56,24 @@ class AnalysisApiTests(AnalysisRequests):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response["Cache-Control"], "no-store")
         analyze.assert_called_once_with(content=source, source_size=len(source.encode("utf-8")))
+
+    def test_routes_python_and_rejects_unsupported_languages(self):
+        with patch("apps.analysis.api.analyze_python", return_value={}) as python, patch("apps.analysis.api.analyze_c") as c:
+            for language in ("cpp", "java"):
+                response = self.post("", language=language)
+                self.assertEqual(response.status_code, 400)
+                self.assertIn("language", response.json()["error"]["details"])
+            self.assertEqual(self.post("x = 1", language="python").status_code, 200)
+            python.assert_called_once_with(content="x = 1", source_size=5)
+            c.assert_not_called()
+
+    def test_python_rejects_invalid_worker_reports(self):
+        result = SimpleNamespace(outcome=SandboxOutcome(ExecutionState.COMPLETED, b'{"partial":true}', exit_code=0))
+        with patch("apps.analysis.service.run_job", return_value=result) as worker:
+            response = self.post("x = 1", language="python")
+        self.assertEqual(response.status_code, 503)
+        self.assertNotIn(b"partial", response.content)
+        worker.assert_called_once_with([SourceFile("input.py", "x = 1")], Toolchain.PYTHON_ANALYZER, PYTHON_COMMAND, LIMITS)
 
     def test_bounded_capacity_and_resource_error_release_the_slot(self):
         self.assertTrue(_slot.acquire(blocking=False))
@@ -139,3 +160,78 @@ class DockerAnalysisTests(AnalysisRequests):
         result = job.run()
         self.assertEqual(result.outcome.state, ExecutionState.COMPLETED, result)
         self.assertEqual(result.outcome.exit_code, 0)
+
+
+@skipUnless(os.environ.get("ARCLIS_TEST_WORKER") == "1", "requires local rootless Docker images")
+@override_settings(LOCAL_ANALYSIS_ENABLED=True)
+class DockerPythonAnalysisTests(AnalysisRequests):
+    def report(self, source):
+        response = self.post(source, language="python")
+        self.assertEqual(response.status_code, 200, response.content)
+        return response.json()
+
+    def test_stdlib_tokens_ast_symbols_and_original_utf8_ranges(self):
+        source = (
+            '\ufeff# leading\r\nfrom example import item as alias\r\n'
+            'def outer(value):\r\n    π = "😀"; result = value + 1\r\n'
+            '    def inner():\r\n        return f"{result}"\r\n    return inner'
+        )
+        report = self.report(source)
+        self.assertTrue(report["syntax_valid"] and report["semantic_valid"])
+        self.assertEqual(report["diagnostics"], [])
+        self.assertIsNone(report["ir"])
+        raw = source.encode()
+        quoted = next(token for token in report["tokens"] if token["kind"] == "string")
+        self.assertEqual(quoted["lexeme"], '"😀"')
+        self.assertEqual(quoted["range"]["start"]["offset"], raw.index(b'"'))
+        self.assertEqual(report["tokens"][0]["range"]["start"]["offset"], 3)
+        self.assertTrue(any(token["kind"] == "fstring_start" for token in report["tokens"]))
+        self.assertTrue(any(token["exact_kind"] == "lpar" for token in report["tokens"]))
+        self.assertTrue(any(token["lexeme"] == "\r\n" for token in report["tokens"]))
+        self.assertEqual(report["tokens"][-1]["range"]["end"]["offset"], len(raw))
+        root = report["ast"]
+        self.assertEqual(root["kind"], "Module")
+        function = root["fields"]["body"][1]
+        assignment = function["fields"]["body"][1]
+        operation = assignment["fields"]["value"]
+        self.assertEqual(operation["fields"]["op"], {"kind": "Add", "fields": {}})
+        self.assertEqual(assignment["range"]["start"]["offset"], raw.index(b"result"))
+        scopes = {entry["name"]: entry for entry in report["scopes"]}
+        self.assertEqual(scopes["inner"]["parent"], scopes["outer"]["id"])
+        names = {(entry["name"], entry["scope"]): entry for entry in report["symbols"]}
+        self.assertIn("imported", names[("alias", 1)]["flags"])
+        self.assertIn("parameter", names[("value", scopes["outer"]["id"])]["flags"])
+        self.assertIn("free", names[("result", scopes["inner"]["id"])]["flags"])
+
+    def test_partial_tokens_and_unicode_scope_diagnostics(self):
+        syntax = self.report("first = 1\r\ndef broken(:\r\n    pass\r\n")
+        self.assertFalse(syntax["syntax_valid"])
+        self.assertTrue(any(token["lexeme"] == "first" for token in syntax["tokens"]))
+        self.assertIsNone(syntax["ast"])
+        self.assertEqual(syntax["diagnostics"][0]["code"], "python-syntax-error")
+        self.assertEqual(syntax["diagnostics"][0]["range"]["start"]["line"], 2)
+
+        source = '"😀"; nonlocal name'
+        semantic = self.report(source)
+        self.assertTrue(semantic["syntax_valid"])
+        self.assertFalse(semantic["semantic_valid"])
+        self.assertIsNotNone(semantic["ast"])
+        self.assertIsNone(semantic["ir"])
+        error = semantic["diagnostics"][0]
+        self.assertEqual(error["code"], "python-semantic-error")
+        self.assertEqual(error["range"]["start"]["offset"], source.encode().index(b"nonlocal"))
+        self.assertIn("outside function", self.report("return 1")["diagnostics"][0]["message"])
+
+    def test_analysis_never_runs_imports_or_module_code(self):
+        report = self.report('import unavailable_arclis_fixture\nlarge = 9007199254740993\nraise RuntimeError("analysis should succeed")\n')
+        self.assertTrue(report["semantic_valid"])
+        self.assertEqual(report["diagnostics"], [])
+        value = report["ast"]["fields"]["body"][1]["fields"]["value"]
+        self.assertEqual(value["fields"]["value"], "9007199254740993")
+        self.assertTrue(self.report('x = "\\q"')["semantic_valid"])
+
+    def test_ast_limit_is_structured_and_empty_source_is_valid(self):
+        self.assertTrue(self.report("")["semantic_valid"])
+        response = self.post("x=0\n" * 1100, language="python")
+        self.assertEqual(response.status_code, 422, response.content)
+        self.assertEqual(response.json()["error"]["code"], "analysis_limit")
