@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "./tokens.css";
+@import "./workspace.css";
 
 @theme inline {
   --font-sans: var(--ui-font);
@@ -18,23 +19,6 @@
     background: var(--surface-selected);
     color: var(--selection-ink);
   }
-}
-
-.app-bar {
-  background: var(--surface-navigator);
-  border-bottom: 1px solid var(--border-subtle);
-}
-
-.app-bar-inner {
-  display: flex;
-  min-height: 4rem;
-  max-width: 78rem;
-  margin-inline: auto;
-  padding: var(--space-2) clamp(1rem, 4vw, 2.5rem);
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-  flex-wrap: wrap;
 }
 
 .brand {

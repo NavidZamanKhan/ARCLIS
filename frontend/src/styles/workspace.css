@@ -1,0 +1,237 @@
+.app-frame {
+  display: flex;
+  flex-direction: column;
+}
+
+.workspace-toolbar {
+  display: flex;
+  z-index: 1;
+  min-height: 3.75rem;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-4);
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--surface-toolbar);
+}
+
+.workspace-toolbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.workspace-layout {
+  display: grid;
+  flex: 1;
+  min-height: 0;
+  grid-template-columns: 14rem minmax(0, 1fr) 16rem;
+  background: var(--surface-workspace);
+}
+
+.app-frame:has(.workspace-layout) {
+  height: 100dvh;
+}
+
+.workspace-navigator,
+.workspace-inspector,
+.workspace-editor,
+.workspace-debug {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+}
+
+.workspace-navigator {
+  background: var(--surface-navigator);
+}
+
+.workspace-inspector {
+  background: var(--surface-inspector);
+}
+
+.workspace-center {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  grid-template-rows: minmax(0, 1fr) 12rem;
+  border-inline: 1px solid var(--border-subtle);
+}
+
+.workspace-editor {
+  display: flex;
+  flex-direction: column;
+}
+
+.workspace-editor .source-code {
+  min-height: 4rem;
+  flex: 1;
+}
+
+.workspace-bar {
+  display: flex;
+  min-height: 2.625rem;
+  flex: none;
+  align-items: center;
+  gap: var(--space-2);
+  padding-inline: var(--space-3);
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: 0.875rem;
+  font-weight: 650;
+}
+
+.workspace-bar h2 {
+  font: inherit;
+}
+
+.editor-bar {
+  justify-content: space-between;
+  background: var(--surface-tab);
+}
+
+.editor-file {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.editor-file svg {
+  color: var(--accent);
+}
+
+.navigator-selector {
+  display: flex;
+  gap: var(--space-1);
+  padding: var(--space-2);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.navigator-selector button {
+  display: flex;
+  min-height: 2rem;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  border: 1px solid transparent;
+  border-radius: var(--control-radius);
+  cursor: pointer;
+  font-size: 0.875rem;
+}
+
+.navigator-selector button:hover,
+.navigator-file:hover {
+  background: var(--surface-hover);
+}
+
+.navigator-selector button[aria-pressed="true"] {
+  border-color: var(--border-control);
+  background: var(--surface-selection-inactive);
+}
+
+.navigator-caption,
+.inspector-heading {
+  padding: var(--space-3);
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  font-weight: 650;
+}
+
+.navigator-list {
+  padding-inline: var(--space-2);
+}
+
+.navigator-file,
+.navigator-symbol {
+  display: flex;
+  min-height: 2rem;
+  width: 100%;
+  align-items: center;
+  gap: var(--space-2);
+  padding-inline: var(--space-2);
+  border-radius: var(--control-radius);
+  font-size: 0.875rem;
+  text-align: start;
+}
+
+.navigator-file {
+  cursor: pointer;
+}
+
+.navigator-file[aria-current="true"] {
+  background: var(--surface-selected);
+  color: var(--selection-ink);
+}
+
+.navigator-file svg,
+.navigator-symbol svg {
+  flex: none;
+}
+
+.file-kind {
+  margin-inline-start: auto;
+  font-size: 0.8125rem;
+}
+
+.navigator-selector button:focus-visible,
+.navigator-file:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.inspector-body dl {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: var(--space-3) var(--space-4);
+  padding: var(--space-2) var(--space-3);
+  font-size: 0.875rem;
+}
+
+.inspector-body dt {
+  color: var(--text-secondary);
+}
+
+.inspector-body dd {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.workspace-debug {
+  border-top: 1px solid var(--border-subtle);
+  background: var(--surface-console);
+}
+
+.debug-bar {
+  background: var(--surface-tab);
+}
+
+.debug-empty {
+  padding: var(--space-4);
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}
+
+@media (max-width: 53rem) {
+  .app-frame:has(.workspace-layout) {
+    height: auto;
+  }
+
+  .workspace-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .workspace-center {
+    min-height: 24rem;
+    grid-template-rows: minmax(0, 1fr) 8rem;
+    border-block: 1px solid var(--border-subtle);
+    border-inline: 0;
+  }
+
+  .workspace-navigator,
+  .workspace-inspector {
+    padding-bottom: var(--space-3);
+  }
+}

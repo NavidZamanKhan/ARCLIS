@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Check, CircleX, Copy, FileCode, Info, RotateCcw, TriangleAlert } from 'lucide-react';
 
 import { Button, Select, Status } from '../components/controls.jsx';
+import { SourceCode } from '../components/SourceCode.jsx';
 import { samples, sourceText } from './samples.js';
 
 const languageOptions = Object.entries(samples).map(([value, sample]) => ({ value, label: sample.label }));
@@ -45,20 +46,7 @@ export function ComponentPreview() {
             <span className="source-file"><FileCode size={16} aria-hidden="true" />{sample.filename}</span>
             <span className="source-mode">Read-only</span>
           </div>
-          <pre className="source-code font-mono" tabIndex={0} aria-label={sample.label + ' source sample'}>
-            <code>
-              {sample.lines.map((line, index) => (
-                <span className="source-line" key={index}>
-                  <span className="line-number" aria-hidden="true">{index + 1}</span>
-                  <span className="line-text">
-                    {line.map((part, offset) => typeof part === 'string' ? part : (
-                      <span key={offset} data-syntax={part.kind}>{part.text}</span>
-                    ))}
-                  </span>
-                </span>
-              ))}
-            </code>
-          </pre>
+          <SourceCode sample={sample} />
         </section>
 
         <section className="controls-panel" aria-labelledby="controls-heading">

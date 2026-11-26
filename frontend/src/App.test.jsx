@@ -16,6 +16,7 @@ describe('the component preview', () => {
   it('switches the source sample and resets the controls without changing the theme', async () => {
     const user = userEvent.setup();
     render(<App />);
+    await user.click(screen.getByRole('button', { name: 'Design system' }));
 
     const language = screen.getByRole('combobox', { name: 'Sample language' });
     const reset = screen.getByRole('button', { name: 'Reset' });
@@ -37,6 +38,7 @@ describe('the component preview', () => {
     const user = userEvent.setup();
     const writeText = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue();
     render(<App />);
+    await user.click(screen.getByRole('button', { name: 'Design system' }));
 
     await user.selectOptions(screen.getByRole('combobox', { name: 'Sample language' }), 'python');
     await user.click(screen.getByRole('button', { name: 'Copy source' }));
@@ -51,6 +53,7 @@ describe('the component preview', () => {
     const user = userEvent.setup();
     vi.spyOn(navigator.clipboard, 'writeText').mockRejectedValue(new Error('Denied'));
     render(<App />);
+    await user.click(screen.getByRole('button', { name: 'Design system' }));
 
     await user.click(screen.getByRole('button', { name: 'Copy source' }));
 
