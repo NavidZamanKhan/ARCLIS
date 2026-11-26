@@ -2,6 +2,80 @@
 
 Advanced Runtime and Compiler Lab for Interactive Study
 
+## Run the restricted HTTPS deployment
+
+This profile serves the Vite production build with Nginx and runs Django
+through Uvicorn on a private Docker network. The demo listens on loopback at
+`https://localhost:8443`. It supports editing and workspace persistence in the
+browser. The deployment disables execution and analysis even if their local
+opt-ins are set. Use the development setup below for compiler features.
+
+From the repository root on Linux or Ubuntu under WSL 2, start rootless
+Docker Engine with systemd cgroup v2 and Docker Compose. Generate a Django
+key and a 30-day localhost TLS certificate on the Linux filesystem:
+
+```bash
+export ARCLIS_DEPLOY_SECRETS_DIR="$HOME/.local/share/arclis-demo"
+(
+  set -eu
+  umask 077
+  install -d -m 700 "$ARCLIS_DEPLOY_SECRETS_DIR"
+  cd "$ARCLIS_DEPLOY_SECRETS_DIR"
+  if [ ! -e django.key ]; then openssl rand -hex 32 > django.key; fi
+  if [ ! -e localhost.key ] && [ ! -e localhost.crt ]; then
+    openssl req -x509 -newkey rsa:2048 -nodes -days 30 -subj /CN=localhost \
+      -addext 'subjectAltName=DNS:localhost' \
+      -addext 'basicConstraints=critical,CA:FALSE' \
+      -addext 'extendedKeyUsage=serverAuth' \
+      -addext 'keyUsage=critical,digitalSignature,keyEncipherment' \
+      -keyout localhost.key -out localhost.crt
+  fi
+  chmod 444 django.key localhost.key localhost.crt
+)
+docker compose -f deployment/compose.yaml up --build --wait
+```
+
+Keep the secrets directory at mode `0700`. Compose mounts the files read-only
+in the service that uses them. Mode `0444` lets the non-root processes read
+their mounts, and the host directory restricts access to its owner. Keep the
+directory outside the checkout. [Compose secrets](https://docs.docker.com/compose/how-tos/use-secrets/)
+
+The certificate is self-signed. Verify its fingerprint with
+`openssl x509 -in "$ARCLIS_DEPLOY_SECRETS_DIR/localhost.crt" -noout -fingerprint -sha256`
+when trusting it for a local browser session. With the backend virtual
+environment active, run the deployment smoke check with certificate validation:
+
+```bash
+python deployment/smoke.py "$ARCLIS_DEPLOY_SECRETS_DIR/localhost.crt"
+docker compose -f deployment/compose.yaml exec backend python manage.py check --deploy
+docker compose -f deployment/compose.yaml ps
+docker compose -f deployment/compose.yaml logs --tail=50
+```
+
+The smoke check verifies the port 8080 redirect, HTTPS headers, host and origin
+policy, HTTP health and capabilities, the 2 MiB body limit, disabled worker
+routes, and the `/ws/health/` WSS handshake. The health socket sends one JSON
+status and closes. Django reports HSTS subdomain and preload warnings for
+this localhost profile. The five-minute HSTS policy applies to the demo host.
+[Django deployment checks](https://docs.djangoproject.com/en/5.2/ref/checks/#security)
+
+Both services have health checks, log rotation, and CPU, memory, and PID
+limits. Nginx limits API and WebSocket traffic to 10 requests per second per
+source address with a burst of 20, and up to 12 concurrent requests or
+connections in those routes. Rootless loopback forwarding may group clients
+under one address. `compose ps` reports service health, and `compose logs`
+shows startup failures and request status. The backend uses an in-memory
+SQLite database. The frontend stores projects in the current browser origin.
+
+On WSL 2, keep an Ubuntu terminal open while using the demo. Run
+`docker compose -f deployment/compose.yaml wait` in that terminal to tie its
+lifetime to the containers. [WSL service lifecycle](https://learn.microsoft.com/en-us/windows/wsl/systemd/#how-does-enabling-systemd-affect-wsl-architecture)
+
+Stop the demo with `docker compose -f deployment/compose.yaml down`. Keep the
+certificate and key pair together when renewing them and recreate the edge
+container to load the renewed files. Public execution requires dedicated
+worker infrastructure and a separate isolation review, as described below.
+
 ## Run the frontend locally
 
 Open an Ubuntu WSL login shell with Node.js 24.15 or later in the Node 24
