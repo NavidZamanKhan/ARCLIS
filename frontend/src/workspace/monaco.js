@@ -13,18 +13,13 @@ import 'monaco-editor/languages/definitions/cpp/register.js';
 import 'monaco-editor/languages/definitions/java/register.js';
 import 'monaco-editor/languages/definitions/python/register.js';
 
-import { samples, sourceText } from '../preview/samples.js';
 import { applyEditorTheme } from './editorTheme.js';
+import { fileMode, languages } from './projectFiles.js';
 
 globalThis.MonacoEnvironment = { getWorker: () => new EditorWorker() };
 
-export function createSourceEditor(host, scope, onLineCount) {
-  const models = new Map(Object.entries(samples).map(([language, sample]) => [
-    language,
-    editor.createModel(sourceText(sample.lines), language, Uri.from({
-      scheme: 'inmemory', authority: 'arclis', path: '/' + scope + '/' + sample.filename,
-    })),
-  ]));
+export function createSourceEditor(host, scope, onLineCount, onFileEdited) {
+  const models = new Map();
   const viewStates = new Map();
   const instance = editor.create(host, {
     model: null,
@@ -40,43 +35,75 @@ export function createSourceEditor(host, scope, onLineCount) {
     renderValidationDecorations: 'on',
     detectIndentation: false,
   });
-  let activeLanguage;
+  let activeId = null;
+  let tabSize = 4;
 
-  function reportLineCount() {
-    onLineCount(instance.getModel().getLineCount());
+  function syncFiles(files, activeFile, markersByFile) {
+    const nextId = activeFile?.id ?? null;
+    const switched = activeId !== nextId;
+    if (switched && activeId !== null) viewStates.set(activeId, instance.saveViewState());
+    if (switched) instance.setModel(null);
+
+    const currentIds = new Set(files.map((file) => file.id));
+    for (const [id, { model }] of models) {
+      if (currentIds.has(id)) continue;
+      model.dispose();
+      models.delete(id);
+      viewStates.delete(id);
+    }
+
+    for (const file of files) {
+      const language = fileMode(file.path);
+      if (!models.has(file.id)) {
+        const uri = Uri.from({ scheme: 'inmemory', authority: 'arclis', path: '/' + scope + '/' + file.id });
+        const model = editor.createModel(file.content, language, uri);
+        model.updateOptions({ tabSize, indentSize: tabSize, insertSpaces: true });
+        models.set(file.id, { model, initialVersion: model.getAlternativeVersionId() });
+      }
+      const { model } = models.get(file.id);
+      if (model.getLanguageId() !== language) editor.setModelLanguage(model, language);
+      editor.setModelMarkers(model, 'arclis', markersByFile[file.path] ?? []);
+    }
+
+    activeId = nextId;
+    if (switched && activeFile) {
+      instance.setModel(models.get(activeId).model);
+      const viewState = viewStates.get(activeId);
+      if (viewState) instance.restoreViewState(viewState);
+    }
+    if (activeFile) instance.updateOptions({ ariaLabel: languages[fileMode(activeFile.path)] + ' source editor' });
+    onLineCount(instance.getModel()?.getLineCount() ?? 0);
   }
 
-  const contentListener = instance.onDidChangeModelContent(reportLineCount);
+  const contentListener = instance.onDidChangeModelContent(() => {
+    const { model, initialVersion } = models.get(activeId);
+    onLineCount(model.getLineCount());
+    onFileEdited(activeId, model.getAlternativeVersionId() !== initialVersion);
+  });
 
   return {
-    open(language) {
-      if (activeLanguage) viewStates.set(activeLanguage, instance.saveViewState());
-      activeLanguage = language;
-      instance.setModel(models.get(language));
-      const viewState = viewStates.get(language);
-      if (viewState) instance.restoreViewState(viewState);
-      instance.updateOptions({ ariaLabel: samples[language].label + ' source editor' });
-      reportLineCount();
+    syncFiles,
+    getContent(id) {
+      return models.get(id)?.model.getValue(undefined, true);
     },
-    setPreferences({ lineNumbers, tabSize }) {
+    setPreferences(preferences) {
+      const { lineNumbers } = preferences;
+      tabSize = preferences.tabSize;
       instance.updateOptions({ lineNumbers: lineNumbers ? 'on' : 'off' });
-      for (const model of models.values()) model.updateOptions({ tabSize, indentSize: tabSize, insertSpaces: true });
+      for (const { model } of models.values()) model.updateOptions({ tabSize, indentSize: tabSize, insertSpaces: true });
     },
     setTheme(theme) {
       applyEditorTheme(editor, theme);
-    },
-    setMarkers(markersByFile) {
-      for (const [language, model] of models) {
-        editor.setModelMarkers(model, 'arclis', markersByFile[samples[language].filename] ?? []);
-      }
     },
     runAction(id) {
       instance.focus();
       return instance.getAction(id)?.run();
     },
     goToSymbol(symbol) {
+      const model = instance.getModel();
+      if (!model) return;
       const separators = instance.getOption(editor.EditorOption.wordSeparators);
-      const [match] = instance.getModel().findMatches(symbol, false, false, true, separators, false, 1);
+      const [match] = model.findMatches(symbol, false, false, true, separators, false, 1);
       if (match) {
         instance.setSelection(match.range);
         instance.revealRangeInCenterIfOutsideViewport(match.range);
@@ -89,7 +116,7 @@ export function createSourceEditor(host, scope, onLineCount) {
     dispose() {
       contentListener.dispose();
       instance.dispose();
-      for (const model of models.values()) model.dispose();
+      for (const { model } of models.values()) model.dispose();
     },
   };
 }

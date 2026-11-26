@@ -85,7 +85,7 @@ export function WorkspaceToolbar({
     <header className="workspace-toolbar" aria-label="Workspace toolbar">
       <div className="workspace-identity">
         <Brand />
-        <ViewTitle className="workspace-name">{showPreview ? 'Design system' : 'Sample workspace'}</ViewTitle>
+        <ViewTitle className="workspace-name">{showPreview ? 'Design system' : 'Workspace'}</ViewTitle>
       </div>
       <div className="workspace-toolbar-actions">
         <ThemeSelector value={theme} onChange={changeTheme} />

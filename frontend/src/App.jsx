@@ -26,6 +26,12 @@ export default function App() {
     setLayout((previous) => ({ ...previous, [panel]: { ...previous[panel], size } }));
   }
 
+  function showNavigator() {
+    setLayout((previous) => previous.navigator.visible ? previous : ({
+      ...previous, navigator: { ...previous.navigator, visible: true },
+    }));
+  }
+
   return (
     <div className="app-frame min-h-svh bg-workspace">
       <WorkspaceToolbar
@@ -33,7 +39,10 @@ export default function App() {
         showPreview={showPreview} toggleView={() => setShowPreview(!showPreview)}
         resetLayout={() => setLayout(defaultLayout())}
       />
-      <Workspace hidden={showPreview} layout={layout} onResize={resizePanel} theme={theme} />
+      <Workspace
+        hidden={showPreview} layout={layout} onResize={resizePanel} theme={theme}
+        showNavigator={showNavigator}
+      />
       {showPreview && (
         <main className="preview">
           <h1>Cupertino Graphite</h1>

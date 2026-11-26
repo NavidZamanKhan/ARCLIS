@@ -209,21 +209,119 @@
 
 .editor-bar {
   justify-content: space-between;
+  padding-inline: 0 var(--space-2);
   background: var(--surface-tab);
 }
 
-.editor-file {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
+.editor-tabs {
+  display: flex;
+  min-width: 0;
+  align-self: stretch;
+  overflow-x: auto;
+  scrollbar-width: thin;
 }
 
-.editor-file svg {
+.editor-tab {
+  display: flex;
+  flex: none;
+  max-width: 15rem;
+  align-items: center;
+  border-inline-end: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+}
+
+.editor-tab[data-active="true"] {
+  background: var(--surface-tab-active);
+  color: var(--text-primary);
+}
+
+.editor-tab button {
+  display: inline-flex;
+  min-width: 0;
+  min-height: 2rem;
+  align-items: center;
+  gap: var(--space-2);
+  padding-inline: var(--space-2);
+  cursor: pointer;
+}
+
+.editor-tab svg {
+  flex: none;
+}
+
+.editor-tab button[aria-pressed="true"] svg {
   color: var(--accent);
+}
+
+.editor-tab button span,
+.navigator-row-main > span:first-of-type {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.editor-tab .editor-tab-close {
+  color: var(--text-muted);
+}
+
+.editor-tab .editor-tab-close:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+.editor-tab-modified {
+  flex: none;
+  width: 0.375rem;
+  height: 0.375rem;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.editor-jump-bar {
+  display: flex;
+  min-height: 2rem;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding-inline: var(--space-2);
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  font-size: 0.8125rem;
+}
+
+.editor-breadcrumbs,
+.editor-breadcrumbs span {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.editor-breadcrumbs {
+  min-width: 0;
+  overflow: auto;
+  white-space: nowrap;
+}
+
+.editor-breadcrumbs button {
+  min-height: 1.75rem;
+  padding-inline: var(--space-1);
+  cursor: pointer;
+}
+
+.editor-breadcrumbs [aria-current] {
+  color: var(--text-primary);
+}
+
+.editor-jump-bar select {
+  min-width: 5rem;
+  max-width: 38%;
+  padding: var(--space-1);
 }
 
 .editor-actions {
   display: flex;
+  flex: none;
   gap: var(--space-1);
 }
 
@@ -237,9 +335,20 @@
   cursor: pointer;
 }
 
-.editor-actions button:hover {
+.editor-actions button:not(:disabled):hover {
   background: var(--surface-hover);
   color: var(--text-primary);
+}
+
+.editor-actions button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.editor-empty {
+  padding: var(--space-4);
+  color: var(--text-muted);
+  font-size: 0.875rem;
 }
 
 .navigator-selector {
@@ -285,6 +394,102 @@
   padding-inline: var(--space-2);
 }
 
+.navigator-list .navigator-list {
+  padding-inline: var(--space-2) 0;
+  margin-inline-start: var(--space-2);
+  border-inline-start: 1px solid var(--border-subtle);
+}
+
+.navigator-bar,
+.navigator-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.navigator-row {
+  gap: 2px;
+}
+
+.navigator-row-main {
+  min-width: 0;
+}
+
+.navigator-more {
+  display: grid;
+  width: 1.75rem;
+  height: 1.75rem;
+  flex: none;
+  place-items: center;
+  border-radius: var(--control-radius);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.navigator-more:hover,
+.navigator-more[aria-expanded="true"] {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+.navigator-empty {
+  padding: var(--space-2) var(--space-3);
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  overflow-wrap: anywhere;
+}
+
+.project-menu {
+  position: fixed;
+  z-index: 3;
+  display: grid;
+  width: 10rem;
+  padding: var(--space-1);
+  border: 1px solid var(--border-control);
+  border-radius: var(--control-radius);
+  background: var(--surface-inspector);
+}
+
+.project-menu button {
+  min-height: 1.875rem;
+  padding-inline: var(--space-2);
+  border-radius: var(--control-radius);
+  font-size: 0.875rem;
+  text-align: start;
+  cursor: pointer;
+}
+
+.project-menu button:hover,
+.project-menu button:focus-visible {
+  background: var(--surface-hover);
+}
+
+.project-dialog label {
+  display: grid;
+  gap: var(--space-1);
+  margin-block-start: var(--space-3);
+  font-size: 0.875rem;
+}
+
+.project-dialog :is(input, select) {
+  width: 100%;
+  min-height: var(--control-height);
+  padding-inline: var(--space-2);
+  border: 1px solid var(--border-control);
+  border-radius: var(--control-radius);
+  background: var(--surface-workspace);
+}
+
+.project-dialog .project-error,
+.navigator-empty[role="alert"],
+.project-dialog .ui-button--danger {
+  color: var(--signal-error);
+}
+
+.project-dialog .ui-button--danger {
+  border: 1px solid var(--signal-error);
+}
+
 .navigator-file {
   display: flex;
   min-height: 2rem;
@@ -308,16 +513,22 @@
 }
 
 .file-kind {
+  flex: none;
   margin-inline-start: auto;
   font-size: 0.8125rem;
 }
 
 .navigator-selector button:focus-visible,
 .navigator-file:focus-visible,
+.navigator-more:focus-visible,
+.project-menu button:focus-visible,
+.project-dialog :is(input, select):focus-visible,
+.editor-tab button:focus-visible,
+.editor-jump-bar :is(button, select):focus-visible,
 .editor-actions button:focus-visible,
 .editor-preferences :is(input, select):focus-visible {
   outline: 2px solid var(--accent);
-  outline-offset: 1px;
+  outline-offset: -2px;
 }
 
 .inspector-body dl {
@@ -363,6 +574,16 @@
   border-radius: var(--control-radius);
   background: var(--surface-workspace);
   padding-inline: var(--space-2);
+}
+
+.target-control {
+  padding-block: var(--space-3);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.target-control select {
+  width: 100%;
+  min-width: 0;
 }
 
 .workspace-debug {

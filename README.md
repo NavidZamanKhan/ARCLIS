@@ -13,10 +13,21 @@ npm ci
 npm run dev
 ```
 
-Open `http://127.0.0.1:5173` for the sample workspace. Select a C, C++, Java,
-or Python sample in the navigator and edit it in Monaco. Edits and cursor
-positions survive file switches until the page reloads. Switch the navigator
-to Symbols to jump to a sample declaration. The editor header opens Find,
+Open `http://127.0.0.1:5173` for the workspace. The navigator starts with C,
+C++, Java, and Python samples. Use the project’s plus button or an item's
+context menu to create, rename, delete, upload, or download files. Open a file
+by clicking its name, or use the jump bar to switch files and locate their
+folders. Monaco keeps edits and cursor positions through tab switches,
+renames, and reopening closed tabs. Workspace files are held in memory until
+the page reloads. Download a file to keep a copy of its current contents.
+
+Choose a source entry file under **Execution target** in the inspector.
+Targets identify one toolchain and its entry file. Java uses the class name
+derived from the package and filename. Execution is connected in a later stage.
+Uploads accept UTF-8 source files with supported extensions and safe relative
+paths, with a 1 MiB per-upload batch limit and up to 50 project source files.
+
+Switch the navigator to Symbols to jump to a sample declaration. The editor header opens Find,
 Replace, and Go to line. Use Ctrl+M to toggle whether Tab indents or moves
 focus. The inspector saves line-number and indentation preferences in the
 browser. The toolbar toggles the navigator, inspector, and

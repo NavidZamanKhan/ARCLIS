@@ -3,19 +3,20 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, expect, it, vi } from 'vitest';
 
 import App from '../App.jsx';
-import { samples } from '../preview/samples.js';
 import { createSourceEditor } from './monaco.js';
+import { fileMode, languages } from './projectFiles.js';
 
 vi.mock('./monaco.js', () => ({ createSourceEditor: vi.fn() }));
 
 createSourceEditor.mockImplementation((host, scope, onLineCount) => ({
-  open(language) {
-    host.setAttribute('aria-label', samples[language].label + ' source editor');
-    onLineCount(samples[language].lines.length + 1);
+  syncFiles(files, activeFile) {
+    if (activeFile) host.setAttribute('aria-label', languages[fileMode(activeFile.path)] + ' source editor');
+    else host.removeAttribute('aria-label');
+    onLineCount(activeFile?.content.split('\n').length ?? 0);
   },
   setTheme: vi.fn(),
   setPreferences: vi.fn(),
-  setMarkers: vi.fn(),
+  getContent: vi.fn(),
   goToSymbol: vi.fn(),
   runAction: vi.fn(),
   layout: vi.fn(),
@@ -42,7 +43,7 @@ it('shows the workspace regions and keeps the navigator, editor, and inspector i
   await user.click(java);
   expect(java.getAttribute('aria-current')).toBe('true');
   expect(within(editor).getByLabelText('Java source editor')).toBeDefined();
-  expect(within(inspector).getByText('Main.java')).toBeDefined();
+  expect(inspector.querySelector('dd').textContent).toBe('Main.java');
 
   await user.click(within(navigator).getByRole('button', { name: 'Symbols' }));
   await user.click(within(navigator).getByRole('button', { name: 'sumTo' }));
@@ -152,8 +153,7 @@ it('dismisses the View menu from the keyboard and keeps the workspace selection 
   expect(screen.getByLabelText('Java source editor')).toBeDefined();
 });
 
-it('restores visibility and sizes only after reset confirmation', async () => {
-  const user = userEvent.setup();
+function mockDialog() {
   const prototype = HTMLDialogElement.prototype;
   const original = Object.getOwnPropertyDescriptors(prototype);
   Object.defineProperties(prototype, {
@@ -163,6 +163,17 @@ it('restores visibility and sizes only after reset confirmation', async () => {
       this.dispatchEvent(new Event('close', { bubbles: true }));
     } },
   });
+  return () => {
+    for (const method of ['showModal', 'close']) {
+      if (original[method]) Object.defineProperty(prototype, method, original[method]);
+      else delete prototype[method];
+    }
+  };
+}
+
+it('restores visibility and sizes only after reset confirmation', async () => {
+  const user = userEvent.setup();
+  const restore = mockDialog();
   try {
     render(<App />);
     const view = screen.getByRole('button', { name: 'View' });
@@ -186,9 +197,73 @@ it('restores visibility and sizes only after reset confirmation', async () => {
     expect(navigator.getAttribute('aria-valuenow')).toBe('224');
     expect(document.activeElement).toBe(view);
   } finally {
-    for (const method of ['showModal', 'close']) {
-      if (original[method]) Object.defineProperty(prototype, method, original[method]);
-      else delete prototype[method];
-    }
+    restore();
   }
+});
+
+it('creates a nested template, retains tab identity on rename and clears a deleted target', async () => {
+  const user = userEvent.setup();
+  const restore = mockDialog();
+  try {
+    render(<App />);
+
+    async function openAction(trigger, label) {
+      await user.click(screen.getByRole('button', { name: trigger }));
+      await user.click(screen.getByRole('menuitem', { name: label }));
+      return within(screen.getByRole('dialog', { name: label }));
+    }
+    const folder = await openAction('Project actions', 'New Folder');
+    await user.type(folder.getByLabelText('Name'), 'src');
+    await user.click(folder.getByRole('button', { name: 'Create' }));
+
+    const source = await openAction('Actions for src', 'New File');
+    await user.selectOptions(source.getByLabelText('Template'), 'python');
+    expect(source.getByLabelText('Name').value).toBe('main.py');
+    await user.click(source.getByRole('button', { name: 'Create' }));
+    const jump = screen.getByRole('navigation', { name: 'Jump bar' });
+    const currentPath = () => jump.querySelector('[aria-current="page"]').title;
+    expect(currentPath()).toBe('src/main.py');
+    const select = screen.getByLabelText('Execution target');
+    const targetId = within(select).getByRole('option', { name: 'src/main.py' }).value;
+    await user.selectOptions(select, targetId);
+
+    const rename = await openAction('Actions for src', 'Rename');
+    await user.clear(rename.getByLabelText('Name'));
+    await user.type(rename.getByLabelText('Name'), '../bad');
+    await user.click(rename.getByRole('button', { name: 'Rename' }));
+    expect(rename.getByRole('alert').textContent).toContain('Start with');
+    await user.clear(rename.getByLabelText('Name'));
+    await user.type(rename.getByLabelText('Name'), 'tools');
+    await user.click(rename.getByRole('button', { name: 'Rename' }));
+    expect(currentPath()).toBe('tools/main.py');
+    expect(within(select).getByRole('option', { name: 'tools/main.py' }).value).toBe(targetId);
+    expect(select.value).toBe(targetId);
+
+    const deletion = await openAction('Actions for tools', 'Delete');
+    expect(document.activeElement).toBe(deletion.getByRole('button', { name: 'Cancel' }));
+    await user.click(deletion.getByRole('button', { name: 'Delete' }));
+    expect(screen.queryByRole('button', { name: 'Close tools/main.py' })).toBeNull();
+    expect(currentPath()).toBe('main.c');
+    expect(select.value).toBe('');
+  } finally {
+    restore();
+  }
+});
+
+it('supports keyboard file actions and reopens a closed file from the jump bar', async () => {
+  const user = userEvent.setup();
+  render(<App />);
+  const root = screen.getByRole('button', { name: 'Project actions' });
+  root.focus();
+  await user.keyboard('{Enter}{ArrowDown}');
+  expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'New Folder' }));
+  await user.keyboard('{Escape}');
+  expect(document.activeElement).toBe(root);
+  expect(screen.queryByRole('menu')).toBeNull();
+
+  await user.click(screen.getByRole('button', { name: 'Close main.c' }));
+  expect(screen.getByText('Open a file from the navigator.')).toBeDefined();
+  const jump = screen.getByLabelText('Jump to file');
+  await user.selectOptions(jump, within(jump).getByRole('option', { name: 'main.c' }).value);
+  expect(screen.getByLabelText('C source editor')).toBeDefined();
 });
