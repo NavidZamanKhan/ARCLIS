@@ -87,6 +87,7 @@ static Value identifier(Analysis *analysis, size_t scope, const AstNode *node)
         report(analysis, node, "undeclared-identifier", "Identifier has no visible declaration");
         return (Value){0};
     }
+    analysis->table->bindings[node->index] = symbol;
     if (symbol->kind == SYMBOL_FUNCTION) {
         return (Value){.kind = VALUE_FUNCTION, .function = symbol};
     }
@@ -270,7 +271,7 @@ static void declare(Analysis *analysis, Symbol symbol)
 {
     Symbol *existing = symbol_find_local(analysis->table, symbol.scope, symbol.name);
     if (existing == NULL) {
-        symbol_add(analysis->table, symbol);
+        analysis->table->bindings[symbol.declaration->index] = symbol_add(analysis->table, symbol);
         return;
     }
     if (analysis->table->scopes[symbol.scope - 1].kind != SCOPE_FILE) {
@@ -284,6 +285,7 @@ static void declare(Analysis *analysis, Symbol symbol)
         report(analysis, symbol.declaration, "conflicting-declaration", "Declaration conflicts with a previous file-scope declaration");
         return;
     }
+    analysis->table->bindings[symbol.declaration->index] = existing;
     if (symbol.definition != NULL) {
         if (existing->definition == NULL) {
             existing->definition = symbol.definition;

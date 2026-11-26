@@ -204,6 +204,49 @@ library declarations, constant initializer rules, and return-path analysis
 are outside this pass. String literals support truth tests and comparisons
 with other string literals. Numeric types accept numeric values.
 
+### Generate three-address intermediate code
+
+```bash
+compiler_engine/c/build/arclis-parse --ir path/to/source.c
+printf 'int f(void) { return 1 + 2 * 3; }\n' | compiler_engine/c/build/arclis-parse --ir
+```
+
+This mode emits the same syntax, diagnostics, and symbol records as
+`--semantic`. A successful analysis adds an `ir` record and an `ir-result`
+with `generated: true`. Lexical, syntax, or semantic errors leave only
+`ir-result` with `generated: false` after the analysis records. Exit codes
+and AST limits are the same as in semantic mode. Instructions are built
+within a bounded buffer before serialization.
+
+Each instruction has `op` and an end-exclusive source `range`. The
+`initializers` array contains zero-initialized storage and explicit
+initialization for file-scope and block-static objects. The `instructions`
+array contains function bodies. `function` and `end-function` delimit each
+definition. Prototypes are represented in the symbol table. An explicit
+`return` supplies its value or null for a void return.
+
+| Instructions | Operands and fields |
+| --- | --- |
+| `global`, `local`, `function`, `end-function` | `symbol` |
+| `parameter` | `symbol`, zero-based `index` |
+| `load`, `store` | `result` and `source`, or `target` and `value` |
+| `binary`, `unary` | `result`, `operator`, and `left` and `right` or `operand` |
+| `move`, `truth` | `result`, `value` |
+| `label`, `jump` | `label` or `target` |
+| `branch-zero`, `branch-nonzero` | `value`, `target`. The other path falls through. |
+| `argument`, `call` | `callSite` links indexed argument `value`s to a `callee`, `argumentCount`, and optional `result`. |
+| `return` | `value` |
+
+Operands distinguish temporary results, symbols, and literals. Symbol IDs
+are one-based positions in the preceding `symbols` array. Temporary, label,
+and call-site IDs are unique within their own sequences. Literal operands
+retain their spelling. Concatenated strings carry an ordered `segments`
+array. Stores, parameters, and returns use the declared types in the symbol
+table to describe conversions. The generator uses left-to-right order when
+the subset leaves evaluation order unspecified, and emits branches to
+preserve `&&` and `||` short-circuiting. The output is an educational
+representation of the analyzed source for inspection.
+
 ## Run the Django backend locally
 
 From the repository root in Ubuntu under WSL 2, with Python 3.12 and its venv module installed:

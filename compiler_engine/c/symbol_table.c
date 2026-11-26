@@ -9,7 +9,8 @@ bool symbol_table_create(SymbolTable *table, size_t node_count)
     *table = (SymbolTable){0};
     table->scopes = calloc(node_count, sizeof(*table->scopes));
     table->symbols = calloc(node_count, sizeof(*table->symbols));
-    if (table->scopes == NULL || table->symbols == NULL) {
+    table->bindings = calloc(node_count, sizeof(*table->bindings));
+    if (table->scopes == NULL || table->symbols == NULL || table->bindings == NULL) {
         symbol_table_destroy(table);
         return false;
     }
@@ -20,6 +21,7 @@ void symbol_table_destroy(SymbolTable *table)
 {
     free(table->scopes);
     free(table->symbols);
+    free(table->bindings);
     *table = (SymbolTable){0};
 }
 
@@ -52,12 +54,13 @@ const Symbol *symbol_resolve(const SymbolTable *table, size_t scope, AstText nam
     return NULL;
 }
 
-void symbol_add(SymbolTable *table, Symbol symbol)
+const Symbol *symbol_add(SymbolTable *table, Symbol symbol)
 {
     SymbolScope *scope = &table->scopes[symbol.scope - 1];
     symbol.previous = scope->last_symbol;
     table->symbols[table->symbol_count] = symbol;
     scope->last_symbol = ++table->symbol_count;
+    return &table->symbols[scope->last_symbol - 1];
 }
 
 static void write_parameter_types(FILE *output, const AstNode *parameter)

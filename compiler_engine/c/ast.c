@@ -90,6 +90,7 @@ AstNode *ast_add(AstTree *tree, AstNode node)
         tree->error = AST_BUILD_MEMORY;
         return NULL;
     }
+    node.index = tree->count;
     allocation->node = node;
     allocation->next = tree->allocations;
     tree->allocations = allocation;

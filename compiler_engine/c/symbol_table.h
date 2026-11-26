@@ -38,6 +38,7 @@ typedef struct {
 typedef struct {
     SymbolScope *scopes;
     Symbol *symbols;
+    const Symbol **bindings;
     size_t scope_count;
     size_t symbol_count;
 } SymbolTable;
@@ -49,7 +50,7 @@ void symbol_table_destroy(SymbolTable *table);
 size_t symbol_scope_add(SymbolTable *table, ScopeKind kind, size_t parent, LexerRange range);
 Symbol *symbol_find_local(const SymbolTable *table, size_t scope, AstText name);
 const Symbol *symbol_resolve(const SymbolTable *table, size_t scope, AstText name);
-void symbol_add(SymbolTable *table, Symbol symbol);
+const Symbol *symbol_add(SymbolTable *table, Symbol symbol);
 void symbol_table_write_json(FILE *output, const SymbolTable *table);
 
 #endif

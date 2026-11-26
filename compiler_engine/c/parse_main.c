@@ -1,4 +1,5 @@
 #include "cli_io.h"
+#include "ir.h"
 #include "semantic.h"
 #include "syntax.h"
 
@@ -27,11 +28,12 @@ static void write_semantic_diagnostic(const SemanticDiagnostic *diagnostic, void
     write_diagnostic("semantic", diagnostic->code, diagnostic->message, diagnostic->range, user);
 }
 
-static int write_semantic_analysis(SyntaxStatus syntax_status, const AstTree *tree)
+static int write_semantic_analysis(SyntaxStatus syntax_status, const AstTree *tree, bool with_ir)
 {
     size_t count = 0;
     const char *valid = "null";
     int exit_code = syntax_status;
+    IrProgram *ir = NULL;
     if (syntax_status == SYNTAX_VALID) {
         SymbolTable table;
         const SemanticStatus status = semantic_analyze(tree, &table, write_semantic_diagnostic, &count);
@@ -42,10 +44,25 @@ static int write_semantic_analysis(SyntaxStatus syntax_status, const AstTree *tr
             symbol_table_write_json(stdout, &table);
             putchar('\n');
         }
-        symbol_table_destroy(&table);
         exit_code = status;
+        if (with_ir && status == SEMANTIC_VALID) {
+            ir = ir_generate(tree, &table);
+            if (ir == NULL) {
+                fputs("arclis-parse: could not generate intermediate code\n", stderr);
+                exit_code = SYNTAX_FAILURE;
+            }
+        }
+        symbol_table_destroy(&table);
     }
     printf("{\"kind\":\"semantic-result\",\"valid\":%s,\"diagnostics\":%zu}\n", valid, count);
+    if (with_ir) {
+        if (ir != NULL) {
+            ir_write_json(stdout, ir);
+            putchar('\n');
+            ir_destroy(ir);
+        }
+        printf("{\"kind\":\"ir-result\",\"generated\":%s}\n", exit_code == SYNTAX_VALID ? "true" : "false");
+    }
     return exit_code;
 }
 
@@ -53,10 +70,11 @@ int main(int argc, char **argv)
 {
     const char *tool = "arclis-parse";
     const bool with_ast = argc > 1 && strcmp(argv[1], "--ast") == 0;
-    const bool with_semantics = argc > 1 && strcmp(argv[1], "--semantic") == 0;
+    const bool with_ir = argc > 1 && strcmp(argv[1], "--ir") == 0;
+    const bool with_semantics = with_ir || (argc > 1 && strcmp(argv[1], "--semantic") == 0);
     const bool has_mode = with_ast || with_semantics;
     if (argc > 2 + has_mode) {
-        fputs("Usage: arclis-parse [--ast | --semantic] [source-file|-]\n", stderr);
+        fputs("Usage: arclis-parse [--ast | --semantic | --ir] [source-file|-]\n", stderr);
         return SYNTAX_FAILURE;
     }
     FILE *source = cli_open_source(argc - has_mode, argv + has_mode, tool);
@@ -79,7 +97,7 @@ int main(int argc, char **argv)
     }
     printf("{\"kind\":\"syntax-result\",\"valid\":%s,\"diagnostics\":%zu}\n",
            status == SYNTAX_VALID ? "true" : "false", count);
-    const int exit_code = with_semantics ? write_semantic_analysis(status, tree) : (int)status;
+    const int exit_code = with_semantics ? write_semantic_analysis(status, tree, with_ir) : (int)status;
     ast_destroy(tree);
     return cli_finish(source, exit_code, tool);
 }

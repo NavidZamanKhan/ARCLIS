@@ -74,6 +74,8 @@ struct AstNode {
     /* Sibling link for the node's containing list. */
     AstNode *next;
     size_t depth;
+    /* Zero-based allocation index for per-node analysis data. */
+    size_t index;
     union {
         AstList list;
         AstText text;
