@@ -395,14 +395,17 @@
   font-size: 0.875rem;
 }
 
-.navigator-selector {
-  display: flex;
+.navigator-selector,
+.inspector-modes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-1);
   padding: var(--space-2);
   border-bottom: 1px solid var(--border-subtle);
 }
 
-.navigator-selector button {
+.navigator-selector button,
+.inspector-modes button {
   display: flex;
   min-height: 2rem;
   min-width: 0;
@@ -417,11 +420,13 @@
 }
 
 .navigator-selector button:hover,
+.inspector-modes button:hover,
 .navigator-file:hover {
   background: var(--surface-hover);
 }
 
-.navigator-selector button[aria-pressed="true"] {
+.navigator-selector button[aria-pressed="true"],
+.inspector-modes button[aria-pressed="true"] {
   border-color: var(--border-control);
   background: var(--surface-selection-inactive);
 }
@@ -436,6 +441,71 @@
 
 .navigator-list {
   padding-inline: var(--space-2);
+}
+
+.navigator-locations > input {
+  display: block;
+  width: calc(100% - 2 * var(--space-2));
+  min-height: 2rem;
+  margin: var(--space-2);
+  padding-inline: var(--space-2);
+  border: 1px solid var(--border-control);
+  border-radius: var(--control-radius);
+  background: var(--surface-workspace);
+  font-size: 0.875rem;
+}
+
+.navigator-locations > .navigator-empty {
+  padding-block: 0 var(--space-2);
+}
+
+.workspace-location-list {
+  padding-inline: var(--space-2);
+}
+
+.workspace-location-list button {
+  display: grid;
+  width: 100%;
+  gap: var(--space-1);
+  padding: var(--space-2);
+  border-block-end: 1px solid var(--border-subtle);
+  border-radius: var(--control-radius);
+  text-align: start;
+  cursor: pointer;
+}
+
+.workspace-location-list button:hover:enabled {
+  background: var(--surface-hover);
+}
+
+.workspace-location-list button:disabled {
+  color: var(--text-muted);
+  cursor: default;
+}
+
+.location-address,
+.location-snippet {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-family: var(--code-font);
+  font-size: 0.75rem;
+}
+
+.location-snippet {
+  color: var(--text-secondary);
+}
+
+.location-severity {
+  color: var(--signal-information);
+  font-size: 0.75rem;
+}
+
+.location-severity[data-severity="error"] {
+  color: var(--signal-error);
+}
+
+.location-severity[data-severity="warning"] {
+  color: var(--signal-warning);
 }
 
 .navigator-list .navigator-list {
@@ -563,6 +633,10 @@
 }
 
 .navigator-selector button:focus-visible,
+.workspace-location-list button:focus-visible,
+.navigator-locations input:focus-visible,
+.inspector-modes button:focus-visible,
+.inspector-issues-link:focus-visible,
 .navigator-file:focus-visible,
 .navigator-more:focus-visible,
 .project-menu button:focus-visible,
@@ -590,6 +664,14 @@
 .inspector-body dd {
   min-width: 0;
   overflow-wrap: anywhere;
+}
+
+.inspector-issues-link {
+  margin: var(--space-2) var(--space-3);
+  padding: var(--space-1);
+  color: var(--accent);
+  font-size: 0.875rem;
+  cursor: pointer;
 }
 
 .editor-preferences {

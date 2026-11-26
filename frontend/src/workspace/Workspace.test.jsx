@@ -16,7 +16,7 @@ createSourceEditor.mockImplementation((host, scope, onLineCount) => ({
   },
   setTheme: vi.fn(),
   setPreferences: vi.fn(),
-  getContent: vi.fn(),
+  goToLocation: vi.fn(),
   goToSymbol: vi.fn(),
   runAction: vi.fn(),
   layout: vi.fn(),
@@ -283,4 +283,24 @@ it('enables Run for the selected target independently of the editor tab', async 
   expect(run.disabled).toBe(false);
   expect(run.title).toBe('Run main.py');
   expect(screen.getByLabelText('C source editor')).toBeDefined();
+});
+
+it('opens workspace search by shortcut and sends cross-file matches to the editor', async () => {
+  const user = userEvent.setup();
+  render(<App />);
+  await user.click(screen.getByRole('button', { name: 'Navigator panel' }));
+  fireEvent.keyDown(window, { key: 'F', ctrlKey: true, shiftKey: true });
+  const search = screen.getByRole('searchbox', { name: 'Search workspace' });
+  expect(document.activeElement).toBe(search);
+
+  await user.type(search, 'println');
+  const result = await screen.findByRole('button', { name: /Main\.java:7:/ });
+  await user.click(result);
+  expect(screen.getByLabelText('Java source editor')).toBeDefined();
+  expect(createSourceEditor.mock.results[0].value.goToLocation).toHaveBeenLastCalledWith(
+    expect.objectContaining({ path: 'Main.java', line: 7, length: 7 }),
+  );
+  await user.click(screen.getByRole('button', { name: 'Build', exact: true }));
+  expect(screen.getByText('GCC')).toBeDefined();
+  expect(screen.getByText('C17')).toBeDefined();
 });

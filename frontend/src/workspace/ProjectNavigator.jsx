@@ -1,7 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Braces, ChevronDown, ChevronRight, Ellipsis, FileCode, Folder, FolderOpen, Plus } from 'lucide-react';
+import {
+  Braces, ChevronDown, ChevronRight, CircleAlert, Ellipsis, FileCode, Folder, FolderOpen, Plus, Search,
+} from 'lucide-react';
 
+import { IssueList, WorkspaceSearch } from './SourceLocations.jsx';
 import { basename, fileMode, languages, parentPath } from './projectFiles.js';
+
+const modes = [
+  ['files', 'Files', FolderOpen], ['symbols', 'Symbols', Braces],
+  ['search', 'Search', Search], ['issues', 'Issues', CircleAlert],
+];
 
 function FileMenu({ menu, close, choose }) {
   const ref = useRef(null);
@@ -54,7 +62,10 @@ function FileMenu({ menu, close, choose }) {
   );
 }
 
-export function ProjectNavigator({ project, activeFile, visible, openFile, goToSymbol, choose, reveal, feedback }) {
+export function ProjectNavigator({
+  project, activeFile, visible, openFile, goToSymbol, choose, reveal, feedback,
+  files, readContent, contentVersion, issues, goToLocation, modeRequest,
+}) {
   const rootButton = useRef(null);
   const rows = useRef(new Map());
   const [view, setView] = useState('files');
@@ -75,6 +86,10 @@ export function ProjectNavigator({ project, activeFile, visible, openFile, goToS
     })));
     setFocusPath(reveal.path);
   }, [reveal]); // A breadcrumb requests focus only when clicked.
+
+  useEffect(() => {
+    if (modeRequest) setView(modeRequest.mode);
+  }, [modeRequest]);
 
   useEffect(() => {
     if (!visible || focusPath === null || view !== 'files') return;
@@ -177,19 +192,20 @@ export function ProjectNavigator({ project, activeFile, visible, openFile, goToS
         </button>
       </div>
       <div className="navigator-selector" aria-label="Navigator view" role="group">
-        <button type="button" aria-pressed={view === 'files'} onClick={() => setView('files')}>
-          <FolderOpen size={15} aria-hidden="true" />Files
-        </button>
-        <button type="button" aria-pressed={view === 'symbols'} onClick={() => setView('symbols')}>
-          <Braces size={15} aria-hidden="true" />Symbols
-        </button>
+        {modes.map(([id, title, Icon]) => (
+          <button key={id} type="button" aria-pressed={view === id} onClick={() => setView(id)}
+            aria-keyshortcuts={id === 'search' ? 'Control+Shift+F Meta+Shift+F' : undefined}>
+            <Icon size={15} aria-hidden="true" />{title}
+          </button>
+        ))}
       </div>
-      {view === 'files' ? (
+      {view === 'files' && (
         <>
           <h3 className="navigator-caption">Project files</h3>
           {tree('') ?? <p className="navigator-empty">No project files.</p>}
         </>
-      ) : (
+      )}
+      {view === 'symbols' && (
         <>
           <h3 className="navigator-caption">Sample declarations</h3>
           {activeFile?.symbols?.length ? (
@@ -205,6 +221,11 @@ export function ProjectNavigator({ project, activeFile, visible, openFile, goToS
           ) : <p className="navigator-empty">No sample declarations.</p>}
         </>
       )}
+      {view === 'search' && (
+        <WorkspaceSearch files={files} content={readContent} contentVersion={contentVersion}
+          goToLocation={goToLocation} focusRequest={modeRequest} />
+      )}
+      {view === 'issues' && <IssueList issues={issues} goToLocation={goToLocation} />}
       {feedback && <p className="navigator-empty" role={feedback.error ? 'alert' : 'status'}>{feedback.message}</p>}
       {visible && menu && <FileMenu menu={menu} close={closeMenu} choose={choose} />}
     </aside>

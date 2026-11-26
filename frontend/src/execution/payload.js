@@ -21,7 +21,7 @@ export function makeExecutionPayload(entries, targetId, getContent) {
       )
       : suffix === (language === 'java' ? 'java' : 'py');
     if (!compatible) continue;
-    const content = getContent(file.id) ?? file.content;
+    const content = getContent(file) ?? file.content;
     if (content.length > 1024 * 1024 - size) throw new Error('Execution is limited to 1 MiB of source.');
     size += encoder.encode(content).length;
     if (size > 1024 * 1024) throw new Error('Execution is limited to 1 MiB of source.');

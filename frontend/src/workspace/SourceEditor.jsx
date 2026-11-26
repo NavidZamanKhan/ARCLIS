@@ -12,7 +12,7 @@ const actions = [
 
 export function SourceEditor({
   ref, files, activeFile, tabs, modified, openFile, closeTab, revealFolder, theme,
-  preferences, hidden, markersByFile, onLineCount, onFileEdited,
+  preferences, hidden, markersByFile, onLineCount, onFileEdited, location,
 }) {
   const host = useRef(null);
   const selectedTab = useRef(null);
@@ -34,6 +34,7 @@ export function SourceEditor({
   useEffect(() => { session.current.setTheme(theme); }, [theme]);
   useEffect(() => { session.current.setPreferences(preferences); }, [preferences]);
   useEffect(() => { if (!hidden && activeFile) session.current.layout(); }, [hidden, activeFile]);
+  useEffect(() => { if (location) session.current.goToLocation(location); }, [location]);
   useEffect(() => {
     if (hidden) return;
     selectedTab.current?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
@@ -46,9 +47,6 @@ export function SourceEditor({
   useImperativeHandle(ref, () => ({
     goToSymbol(symbol) {
       session.current?.goToSymbol(symbol);
-    },
-    getContent(id) {
-      return session.current?.getContent(id);
     },
   }), []);
 

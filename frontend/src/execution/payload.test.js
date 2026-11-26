@@ -11,7 +11,7 @@ it('selects the target toolchain, source directory and current editor text', () 
     { kind: 'file', path: 'common.h', content: 'header' },
   ]);
   expect(makeExecutionPayload(project.entries, project.activeId,
-    (id) => id === project.activeId ? 'edited' : undefined)).toEqual({
+    ({ id }) => id === project.activeId ? 'edited' : undefined)).toEqual({
     language: 'c', entry_file: 'app/main.c', interactive: true,
     files: [
       { path: 'app/main.c', content: 'edited' },

@@ -11,6 +11,7 @@ export function useWorkspaceProject() {
   const buffers = useRef(new Map());
   const saver = useRef(null);
   const [modified, setModified] = useState(new Set());
+  const [contentVersion, setContentVersion] = useState(0);
   const [loading, setLoading] = useState(() => typeof indexedDB !== 'undefined');
   const [storageIssue, setStorageIssue] = useState(() => typeof indexedDB === 'undefined' ? saveUnavailable : '');
 
@@ -80,6 +81,7 @@ export function useWorkspaceProject() {
 
   const markFile = useCallback((id, dirty, content) => {
     buffers.current.set(id, content);
+    setContentVersion((version) => version + 1);
     setModified((previous) => {
       if (previous.has(id) === dirty) return previous;
       const next = new Set(previous);
@@ -104,5 +106,8 @@ export function useWorkspaceProject() {
     saver.current?.schedule();
   }
 
-  return { project, currentProject, modified, readContent, markFile, updateProject, loading, storageIssue };
+  return {
+    project, currentProject, modified, contentVersion, readContent, markFile, updateProject, loading, storageIssue,
+    saveNow: () => saver.current?.protect(),
+  };
 }

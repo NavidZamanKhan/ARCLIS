@@ -91,8 +91,9 @@ export function WorkspaceToolbar({
       {(!showPreview || execution.active) && (
         <div className="execution-toolbar" aria-label="Execution">
           <Button icon={Play} aria-label="Run" title={target ? 'Run ' + target.entry_file : 'Select an execution target'}
-            disabled={showPreview || !target || execution.active} onClick={runTarget} />
+            aria-keyshortcuts="Control+Enter Meta+Enter" disabled={showPreview || !target || execution.active} onClick={runTarget} />
           <Button icon={Square} aria-label="Stop" title="Stop execution"
+            aria-keyshortcuts="Control+Shift+Enter Meta+Shift+Enter"
             disabled={!execution.active || execution.run.state === 'CANCELLING'} onClick={execution.stop} />
           <span
             className="execution-status" role="status" aria-label="Execution status"

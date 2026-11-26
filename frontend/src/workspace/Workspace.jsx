@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
 
 import { DebugPanel } from '../execution/DebugPanel.jsx';
 import { makeExecutionPayload } from '../execution/payload.js';
@@ -7,59 +7,18 @@ import { ProjectDialog } from './ProjectDialog.jsx';
 import { ProjectNavigator } from './ProjectNavigator.jsx';
 import { SourceEditor } from './SourceEditor.jsx';
 import { Splitter } from './Splitter.jsx';
+import { WorkspaceInspector } from './WorkspaceInspector.jsx';
 import { WorkspaceToolbar } from './WorkspaceToolbar.jsx';
-import { readEditorPreferences, saveEditorPreferences, tabSizes } from './editorPreferences.js';
+import { readEditorPreferences, saveEditorPreferences } from './editorPreferences.js';
 import { clampSize, panelOptions } from './panelLayout.js';
+import { currentIssues, issueMarkers, readBuildIssues } from './sourceLocations.js';
 import { useWorkspaceProject } from './useWorkspaceProject.js';
 import {
-  addEntries, basename, closeTab, createProject, deleteEntry, executionTarget, fileMode,
-  joinPath, languages, openFile, parentPath, ProjectFileError, readUploads, renameEntry, templateContent,
+  addEntries, basename, closeTab, createProject, deleteEntry, executionTarget,
+  joinPath, openFile, parentPath, ProjectFileError, readUploads, renameEntry, templateContent,
 } from './projectFiles.js';
 
 const emptyMarkers = {};
-
-function Inspector({ file, lineCount, files, targetId, selectTarget, preferences, setPreference, visible }) {
-  return (
-    <aside className="workspace-inspector" id="workspace-inspector" aria-label="Inspector" hidden={!visible}>
-      <div className="workspace-bar"><h2>Inspector</h2></div>
-      <div className="inspector-body">
-        <h3 className="inspector-heading">File details</h3>
-        {file ? (
-          <dl>
-            <dt>Path</dt><dd>{file.path}</dd>
-            <dt>Language</dt><dd>{languages[fileMode(file.path)]}</dd>
-            <dt>Lines</dt><dd>{lineCount}</dd>
-          </dl>
-        ) : <p className="navigator-empty">No file open.</p>}
-        <div className="editor-preferences target-control">
-          <label>
-            Execution target
-            <select value={targetId ?? ''} onChange={(event) => selectTarget(Number(event.target.value) || null)}>
-              <option value="">None selected</option>
-              {files.filter(executionTarget).map((target) => <option key={target.id} value={target.id}>{target.path}</option>)}
-            </select>
-          </label>
-        </div>
-        <h3 className="inspector-heading">Editor preferences</h3>
-        <div className="editor-preferences">
-          <label>
-            <input
-              type="checkbox" checked={preferences.lineNumbers}
-              onChange={(event) => setPreference('lineNumbers', event.target.checked)}
-            />
-            Line numbers
-          </label>
-          <label>
-            Indentation
-            <select value={preferences.tabSize} onChange={(event) => setPreference('tabSize', Number(event.target.value))}>
-              {tabSizes.map((size) => <option key={size} value={size}>{size} spaces</option>)}
-            </select>
-          </label>
-        </div>
-      </div>
-    </aside>
-  );
-}
 
 export function Workspace({ hidden, layout, onResize, showPanel, theme, toolbar, markersByFile = emptyMarkers }) {
   const viewport = useRef(null);
@@ -67,8 +26,11 @@ export function Workspace({ hidden, layout, onResize, showPanel, theme, toolbar,
   const uploadInput = useRef(null);
   const uploadFolder = useRef(null);
   const {
-    project, currentProject, modified, markFile, readContent, updateProject, storageIssue, loading,
+    project, currentProject, modified, markFile, readContent, contentVersion, updateProject, saveNow, storageIssue, loading,
   } = useWorkspaceProject();
+  const [modeRequest, setModeRequest] = useState(null);
+  const [location, setLocation] = useState(null);
+  const [buildSources, setBuildSources] = useState(new Map());
   const [reveal, setReveal] = useState(null);
   const [dialog, setDialog] = useState(null);
   const [feedback, setFeedback] = useState(null);
@@ -79,6 +41,18 @@ export function Workspace({ hidden, layout, onResize, showPanel, theme, toolbar,
   const activeFile = files.find((file) => file.id === project.activeId);
   const target = executionTarget(files.find((file) => file.id === project.targetId));
   const execution = useExecution();
+  const rawIssues = useMemo(() => readBuildIssues(execution.run.log, buildSources), [execution.run.log, buildSources]);
+  const issues = useMemo(
+    () => currentIssues(rawIssues, buildSources, files, readContent),
+    [rawIssues, buildSources, files, readContent, contentVersion],
+  );
+  const markers = useMemo(() => {
+    const merged = { ...markersByFile };
+    for (const [path, annotations] of Object.entries(issueMarkers(issues))) {
+      merged[path] = [...(markersByFile[path] ?? []), ...annotations];
+    }
+    return merged;
+  }, [issues, markersByFile]);
 
   function selectFile(id) {
     updateProject((state) => openFile(state, id));
@@ -89,18 +63,49 @@ export function Workspace({ hidden, layout, onResize, showPanel, theme, toolbar,
     setReveal({ path });
   }
 
+  function showNavigatorMode(mode) {
+    showPanel('navigator');
+    setModeRequest({ mode });
+  }
+
+  function goToLocation(request) {
+    selectFile(request.id);
+    setLocation({ ...request });
+  }
+
   function runTarget() {
+    if (!target || execution.active) return;
     showPanel('debug');
     const { entries, targetId } = currentProject.current;
     let payload;
     try {
-      payload = makeExecutionPayload(entries, targetId, (id) => editor.current?.getContent(id));
+      payload = makeExecutionPayload(entries, targetId, readContent);
     } catch (error) {
+      setBuildSources(new Map());
       execution.reject(target, error.message);
       return;
     }
+    const ids = new Map(entries.filter(({ kind }) => kind === 'file').map(({ path, id }) => [path, id]));
+    setBuildSources(new Map(payload.files.map((file) => [file.path, { ...file, id: ids.get(file.path) }])));
     void execution.start(payload);
   }
+
+  const handleShortcut = useEffectEvent((event) => {
+    if (!(event.ctrlKey || event.metaKey) || event.altKey || event.isComposing || event.repeat
+      || document.querySelector('dialog[open]')) return;
+    const key = event.key.toLowerCase();
+    if (key === 'f' && event.shiftKey) {
+      event.preventDefault();
+      showNavigatorMode('search');
+    } else if (key === 's' && !event.shiftKey) {
+      event.preventDefault();
+      saveNow();
+    } else if (key === 'enter') {
+      event.preventDefault();
+      if (event.shiftKey) execution.stop();
+      else runTarget();
+    }
+  });
 
   function choose(type, item) {
     setFeedback(null);
@@ -165,6 +170,12 @@ export function Workspace({ hidden, layout, onResize, showPanel, theme, toolbar,
   }
 
   useEffect(() => { saveEditorPreferences(preferences); }, [preferences]);
+  useEffect(() => {
+    if (hidden || loading) return undefined;
+    const listener = (event) => handleShortcut(event);
+    window.addEventListener('keydown', listener, true);
+    return () => window.removeEventListener('keydown', listener, true);
+  }, [hidden, loading]);
 
   useEffect(() => {
     if (hidden || loading || typeof ResizeObserver === 'undefined') return undefined;
@@ -205,6 +216,8 @@ export function Workspace({ hidden, layout, onResize, showPanel, theme, toolbar,
           <ProjectNavigator
             project={project} activeFile={activeFile} openFile={selectFile} visible={layout.navigator.visible}
             goToSymbol={(symbol) => editor.current?.goToSymbol(symbol)} choose={choose} reveal={reveal} feedback={feedback}
+            files={files} readContent={readContent} contentVersion={contentVersion} issues={issues}
+            goToLocation={goToLocation} modeRequest={modeRequest}
           />
           {splitter('navigator')}
           <div className="workspace-center">
@@ -212,17 +225,18 @@ export function Workspace({ hidden, layout, onResize, showPanel, theme, toolbar,
               ref={editor} files={files} activeFile={activeFile} tabs={project.tabs} modified={modified}
               openFile={selectFile} closeTab={(id) => updateProject((state) => closeTab(state, id))}
               revealFolder={revealFolder} theme={theme} hidden={hidden} preferences={preferences}
-              markersByFile={markersByFile} onLineCount={setLineCount} onFileEdited={markFile}
+              markersByFile={markers} onLineCount={setLineCount} onFileEdited={markFile} location={location}
             />
             {splitter('debug')}
             <DebugPanel visible={layout.debug.visible} execution={execution} theme={theme} workspaceHidden={hidden} />
           </div>
           {splitter('inspector')}
-          <Inspector
-            file={activeFile} lineCount={lineCount} files={files} targetId={project.targetId}
+          <WorkspaceInspector
+            file={activeFile} lineCount={lineCount} readContent={readContent} files={files} targetId={project.targetId}
             selectTarget={(targetId) => updateProject((state) => ({ ...state, targetId }))}
             preferences={preferences} visible={layout.inspector.visible}
             setPreference={(key, value) => setPreferences((previous) => ({ ...previous, [key]: value }))}
+            target={target} execution={execution} issueCount={issues.length} showIssues={() => showNavigatorMode('issues')}
           />
           <input
             ref={uploadInput} type="file" multiple hidden aria-label="Upload source files"

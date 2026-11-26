@@ -42,6 +42,19 @@ compiler messages, and **Execution details** shows the target, result, exit
 code when available, and duration. The console displays program-supplied
 control sequences as text.
 
+The navigator's **Search** finds text across open and closed project files.
+Select a result to jump to its match. **Issues** shows recognized GCC, G++,
+javac, and Python compiler diagnostics at their source locations and marks
+them in the editor. A changed or renamed file marks its old issues as stale.
+Diagnostics without a column jump to the start of the reported line. The
+full compiler output remains in **Build log**.
+
+The inspector's **File** view shows the current path, encoding, size, and line
+count. **Build** shows the selected target's toolchain and sandbox limits
+alongside the latest execution status. Use Ctrl or Cmd with Shift+F for
+workspace search, S to flush pending saves, Enter to run, and Shift+Enter
+to stop.
+
 Switch the navigator to Symbols to jump to a sample declaration. The editor header opens Find,
 Replace, and Go to line. Use Ctrl+M to toggle whether Tab indents or moves
 focus. The inspector saves line-number and indentation preferences in the

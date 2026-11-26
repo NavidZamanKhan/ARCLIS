@@ -62,7 +62,9 @@ export function createSourceEditor(host, scope, onLineCount, onFileEdited) {
       }
       const { model } = models.get(file.id);
       if (model.getLanguageId() !== language) editor.setModelLanguage(model, language);
-      editor.setModelMarkers(model, 'arclis', markersByFile[file.path] ?? []);
+      const markers = (markersByFile[file.path] ?? []).filter((marker) => marker.startLineNumber <= model.getLineCount())
+        .map((marker) => ({ ...marker, ...model.validateRange(marker) }));
+      editor.setModelMarkers(model, 'arclis', markers);
     }
 
     activeId = nextId;
@@ -83,9 +85,6 @@ export function createSourceEditor(host, scope, onLineCount, onFileEdited) {
 
   return {
     syncFiles,
-    getContent(id) {
-      return models.get(id)?.model.getValue(undefined, true);
-    },
     setPreferences(preferences) {
       const { lineNumbers } = preferences;
       tabSize = preferences.tabSize;
@@ -108,6 +107,15 @@ export function createSourceEditor(host, scope, onLineCount, onFileEdited) {
         instance.setSelection(match.range);
         instance.revealRangeInCenterIfOutsideViewport(match.range);
       }
+      instance.focus();
+    },
+    goToLocation({ id, line, column, length = 1 }) {
+      if (id !== activeId) return;
+      const range = instance.getModel().validateRange({
+        startLineNumber: line, endLineNumber: line, startColumn: column, endColumn: column + length,
+      });
+      instance.setSelection(range);
+      instance.revealRangeInCenter(range);
       instance.focus();
     },
     layout() {
