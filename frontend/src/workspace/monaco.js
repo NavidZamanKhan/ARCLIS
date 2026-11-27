@@ -1,5 +1,6 @@
 import { editor, Uri } from 'monaco-editor/editor.js';
 import EditorWorker from 'monaco-editor/editor/editor.worker.js?worker';
+import 'monaco-editor/editor/contrib/suggest/browser/suggestController.js';
 import 'monaco-editor/features/codicon/register.js';
 import 'monaco-editor/features/bracketMatching/register.js';
 import 'monaco-editor/features/clipboard/register.js';
@@ -8,6 +9,7 @@ import 'monaco-editor/features/find/register.js';
 import 'monaco-editor/features/gotoError/register.js';
 import 'monaco-editor/features/gotoLine/register.js';
 import 'monaco-editor/features/hover/register.js';
+import 'monaco-editor/features/snippet/register.js';
 import 'monaco-editor/features/toggleTabFocusMode/register.js';
 import 'monaco-editor/languages/definitions/cpp/register.js';
 import 'monaco-editor/languages/definitions/java/register.js';
@@ -15,6 +17,7 @@ import 'monaco-editor/languages/definitions/python/register.js';
 
 import { applyEditorTheme } from './editorTheme.js';
 import { fileMode, languages } from './projectFiles.js';
+import './sourceCompletions.js';
 
 globalThis.MonacoEnvironment = { getWorker: () => new EditorWorker() };
 
@@ -34,6 +37,9 @@ export function createSourceEditor(host, scope, onLineCount, onFileEdited) {
     renderLineHighlight: 'gutter',
     renderValidationDecorations: 'on',
     detectIndentation: false,
+    quickSuggestions: { other: 'on', comments: 'off', strings: 'off' },
+    wordBasedSuggestions: 'currentDocument',
+    tabCompletion: 'on',
   });
   let activeId = null;
   let tabSize = 4;

@@ -156,6 +156,11 @@ the source filename automatically. For Java, use a class named `Main` without
 a package declaration. The browser restores each language's last draft and
 selection. Use **Examples** to insert a sample explicitly.
 
+The editor suggests keywords, common library names, snippets, and words from
+the current file. Press **Ctrl+Space** to open suggestions and **Tab** to
+accept one. In Java, type **sout** and press **Tab** to insert
+`System.out.println();` with the cursor inside the parentheses.
+
 Start the [loopback backend](#interactive-sessions-on-loopback), then press
 **Ctrl+Enter** or select **Run**. ARCLIS submits the current editor contents
 to `http://127.0.0.1:8000`.
