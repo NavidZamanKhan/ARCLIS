@@ -4,9 +4,10 @@
 
 1. **Project goal.** ARCLIS combines a four-language interactive workspace
    with an inspectable C compiler front end for compiler construction labs.
-2. **Workspace.** Show the navigator, Monaco editor, inspector, and debug
-   console. Select a target and explain that the browser stores projects,
-   tabs, and preferences for the current origin.
+2. **Workspace.** Show the Quick Run language selector, Monaco editor,
+   and debug console. Open Projects to demonstrate the navigator and
+   inspector. The browser stores Quick Run drafts, projects, and preferences
+   for the current origin.
 3. **Compiler contribution.** Follow one C function through Flex tokens,
    the Bison grammar, source-located AST nodes, scopes and symbols, and
    labeled three-address instructions. Use `sum_to` and the `&&` condition
@@ -23,10 +24,11 @@
 Use the [full local workspace](../README.md#start-the-full-local-workspace)
 with both worker opt-ins and all five images. Confirm both features are
 available at `http://127.0.0.1:8000/api/v1/capabilities/`. Open the IDE at
-`http://127.0.0.1:5173` in a fresh browser profile for the demo. Use
-**Project actions → Reset Workspace → Start empty**, then **Upload Files**.
-Upload one example at a time, open it, and set it as the inspector's
-**Execution target**. Start empty again when switching examples.
+`http://127.0.0.1:5173` in a fresh browser profile and open **Projects**.
+Use **Project actions → Upload Files** and open the example. A project with
+one runnable file uses it automatically. Use **Reset Workspace → Start
+empty** when switching examples. For interactive examples, type each value
+in the console and press Enter.
 
 | Example | What to show | Expected result |
 | --- | --- | --- |

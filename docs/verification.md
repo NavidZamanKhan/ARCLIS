@@ -48,6 +48,24 @@ and author and committer identities for Navid Zaman Khan and Sadman Sakib Khan.
 Generated files, credentials, and local development records stay outside the
 tracked submission. Use the Git history for contribution attribution.
 
+## Quick Run and console remediation
+
+The same WSL setup passed 91 Docker-enabled Django tests, 41 Vitest tests,
+the production frontend build, and 25 Chromium workflows. The strict C17
+build still passed all 55 compiler fixtures and two C API tests.
+
+Chromium submitted the four audit programs from blank Quick Run drafts,
+verified the submitted source and automatic entry filename, and typed into
+xterm while each program was waiting. Every program produced the expected
+output and exited with code zero. Additional runs verified immediate edits,
+multiline paste and EOF, independent draft and project recovery, service
+retry, source-linked diagnostics, and cancellation. A legacy Projects record
+reopened on localhost, and the Quick Run layout fit at widths of 375, 500,
+and 1440 pixels.
+
+The restricted HTTPS/WSS smoke checks and Chromium's disabled Run and
+Analyze controls passed on a separate loopback Compose instance.
+
 ## Known limits
 
 - The custom compiler covers the documented C subset. Native toolchains

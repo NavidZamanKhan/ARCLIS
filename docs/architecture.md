@@ -25,10 +25,14 @@ flowchart LR
 | [`deployment/`](../deployment/) | Restricted HTTPS/WSS Compose profile and smoke check |
 | [`examples/`](../examples/) | Academic demonstration source files |
 
-Monaco keeps live buffers separate from saved file metadata. Run and Analyze
-capture the current buffer contents when submitted. Source-linked diagnostics
-and markers are tied to that snapshot. IndexedDB stores files, folders, tabs,
-and the target, while browser settings retain layout and editor preferences.
+Quick Run chooses a toolchain and canonical filename from the language
+selector and submits that single source file. Projects infer the entry if
+there is one runnable file and offer an entry chooser when several qualify.
+Run and Analyze capture the current Monaco model before making the request.
+Source-linked diagnostics reference that snapshot. IndexedDB preserves Quick
+Run drafts separately from the existing project record, which stores files,
+folders, tabs, and the entry selection. Browser settings retain layout and
+editor preferences.
 The backend does not use SQLite to store browser projects or execution sessions.
 
 ## Language coverage
@@ -102,7 +106,16 @@ The execution WebSocket accepts `{"type":"stdin","data":"7\n"}`,
 `{"type":"eof"}`, and `{"type":"cancel"}`. It streams `status`,
 `stdout`, `stderr`, `diagnostics`, and `error` packets. One terminal `result`
 reports the final state, `exit_code`, and `execution_time_ms`. Exit code can be
-null if no native process exit was available. The owner token belongs in the
+null if no native process exit was available. An optional positive safe
+integer `request_id` on stdin and EOF messages requests `input_ack` on
+acceptance or a correlated `stdin_rejected` error. The browser stages input
+locally until Enter and echoes it after acceptance by the worker's input queue.
+The worker sends input to the program through standard streams. The browser
+console supports line editing and EOF over those streams, with a 30-second
+inactivity limit. Worker startup can return `worker_unavailable` with a safe
+setup message. The capabilities endpoint reports feature availability for the
+client, and each job verifies Docker and its isolation settings at startup.
+The owner token belongs in the
 subprotocol header and should be kept out of URLs and logs.
 
 DRF errors use `{"error":{"code":"...","details":{...}}}`. Relevant status

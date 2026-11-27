@@ -150,34 +150,40 @@ npm ci
 npm run dev
 ```
 
-Open `http://127.0.0.1:5173` for the workspace. The navigator starts with C,
-C++, Java, and Python samples. Use the project’s plus button or an item's
-context menu to create, rename, delete, upload, or download files. Open a file
-by clicking its name, or use the jump bar to switch files and locate their
-folders. Monaco keeps edits and cursor positions through tab switches,
-renames, and reopening closed tabs. The browser saves workspace files,
-open tabs, and the selected execution target in IndexedDB. Panel layout,
-theme, and editor preferences are saved locally. Use **Reset Workspace** in
-the project menu to restore the original samples after confirmation.
-Download a file to keep a separate copy of its current contents.
+Open `http://127.0.0.1:5173` and choose C, C++, Java, or Python in **Quick Run**.
+Each language starts with a blank draft on the first visit. ARCLIS creates
+the source filename automatically. For Java, use a class named `Main` without
+a package declaration. The browser restores each language's last draft and
+selection. Use **Examples** to insert a sample explicitly.
 
-Choose a source entry file under **Execution target** in the inspector.
-Targets identify one toolchain and its entry file. Java uses the class name
-derived from the package and filename. C and C++ targets compile sources in
-the entry file's folder and can include compatible headers from the workspace.
-Keep separate native programs in separate folders. Java and Python submissions
-include files of the selected language throughout the workspace.
-Uploads accept UTF-8 source files with supported extensions and safe relative
-paths, with a 1 MiB per-upload batch limit and up to 50 project source files.
+Start the [loopback backend](#interactive-sessions-on-loopback), then select
+**Run**. ARCLIS submits the current editor contents to `http://127.0.0.1:8000`.
+When the program prompts, type in **Console** and press Enter. Paste stages
+text and Enter submits one line at a time. Use Ctrl+D or **Send EOF** to
+close standard input after sending the staged text. **Stop** cancels the run.
+An interactive run times out after 30 seconds without submitted input or
+program output. Flush prompts from your program when it writes them without
+a line break. **Build log** shows
+compiler messages and links recognized errors to the source. **Execution
+details** shows the result, exit code when available, and duration. If the
+backend is offline or execution is disabled, start the enabled loopback
+backend and use **View → Retry services**. A worker startup error is a
+separate result. Check rootless Docker and the requested toolchain image.
 
-Start the loopback backend as described in [Interactive sessions](#interactive-sessions-on-loopback),
-then use **Run** on the workspace toolbar. The browser submits the current
-editor contents to `http://127.0.0.1:8000`. In **Console**, wait for the program's
-prompt and submit a line with Enter or **Send**. Use **Send EOF** to finish
-standard input and **Stop** to request cancellation. **Build log** shows
-compiler messages, and **Execution details** shows the target, result, exit
-code when available, and duration. The console displays program-supplied
-control sequences as text.
+Open **Projects** to access files, folders, uploads, and multi-file runs. A
+saved workspace from an earlier version opens here with its files, tabs, and
+entry selection. A new project starts empty. Use the plus button or a file's
+context menu to manage files. The browser stores Projects and Quick Run drafts
+in separate IndexedDB records. Download a project file to keep a separate
+copy of its current contents.
+
+A project with one runnable file uses it automatically. When multiple files
+can run, choose **Execution target** in the inspector or use the file's
+context menu. C and C++ runs compile compatible sources in the entry file's
+folder and can include compatible headers from the workspace. Java uses the
+entry file's folder path and filename to derive its main class. Java and
+Python runs include project files of the selected language. Uploads accept
+UTF-8 source files, up to 1 MiB per upload and 50 source files per project.
 
 The navigator's **Search** finds text across open and closed project files.
 Select a result to jump to its match. **Issues** shows recognized GCC, G++,
@@ -192,13 +198,12 @@ alongside the latest execution status. Use Ctrl or Cmd with Shift+F for
 workspace search, S to flush pending saves, Enter to run, and Shift+Enter
 to stop.
 
-Switch the navigator to Symbols to jump to a sample declaration. The editor header opens Find,
-Replace, and Go to line. Use Ctrl+M to toggle whether Tab indents or moves
-focus. The inspector saves line-number and indentation preferences in the
-browser. The toolbar toggles the navigator, inspector, and
-debug panel. Drag a separator or focus it and use the arrow keys to resize
-its panel. Home and End move the panel to its minimum and maximum sizes.
-Narrow windows stack the panels vertically.
+The editor header opens Find, Replace, and Go to line. Use Ctrl+M to toggle
+whether Tab indents or moves focus. **View → Editor preferences** opens the
+saved editor settings. In Projects, the toolbar toggles all three panels.
+Drag a separator or focus it and use the arrow keys to resize its panel.
+Home and End move the panel to its minimum and maximum sizes. Narrow
+windows stack the panels vertically.
 
 The View menu opens the design system preview or resets the workspace layout
 after confirmation. Graphite and Silver work in both views, and the browser
@@ -401,7 +406,7 @@ inspector shows tokens, the AST, symbols, diagnostics, and intermediate code.
 Expand AST nodes to see their children and select a result to jump to its
 source range. Diagnostics also appear in Monaco. Editing, renaming, or
 deleting the analyzed file marks its snapshot stale and clears its markers.
-**Run** continues to use the selected execution target and native toolchain.
+**Run** uses the native toolchain for the Quick Run language or project entry.
 
 For a complete report, try `int main(void) { return 1 + 2 * 3; }` in a C
 buffer. The starter sample calls `printf` through a system header. The
@@ -504,20 +509,20 @@ a generic message. The Django health endpoint retains its existing contract.
 
 ## Workspace shortcuts, templates, and test cases
 
-- Press Ctrl+P or Cmd+P for **Quick Open**. Filter by filename or path, move
+- In Projects, press Ctrl+P or Cmd+P for **Quick Open**. Filter by filename or path, move
   with the arrow keys, and press Enter to open the selected file.
 - Press Shift+F10 on a navigator row to open its file menu. Source files can
   be selected as the execution target. Files and folders support **Copy Path**.
 - Choose a **Two-number sum** template in **New File** to create a C, C++, Java,
   or Python exercise. The dialog defaults to a dedicated folder and selects the
   new source as the execution target.
-- In **Debug → Test cases**, select a case and choose **Run case**. The app sends
+- For a two-number sum template, select a case in **Debug → Test cases** and choose **Run case**. The app sends
   the predefined input and EOF, then compares displayed stdout with the expected
   output, including line breaks. See program output in **Console** and compiler
   messages in **Build log**.
 - In the **File** inspector, adjust font size, word wrap, minimap, line numbers,
   and indentation. **Reset editor preferences** restores the defaults.
-- **Reset Workspace** can restore the sample project or start empty. Confirming
+- **Reset Workspace** starts empty by default and offers **Restore sample files**. Confirming
   clears the current execution and analysis and preserves editor preferences.
 
 ## Run the browser integration suite
@@ -540,10 +545,10 @@ uses fresh browser contexts, enables the local API opt-ins for the suite,
 and stops both servers on exit. Failure screenshots are written to
 `frontend/test-results/`.
 
-The suite exercises multi-file C, C++, Java, and Python jobs with two input
-lines and EOF. It also checks workspace persistence, compiler and runtime
-errors, concurrent browser sessions and cancellation, HTTP and WebSocket
-failures, and the C and Python analysis inspectors.
+The suite exercises all four languages from a blank Quick Run draft and in
+multi-file projects. It tests direct console entry, pasted lines, EOF, exact
+source submission after edits, separate draft recovery, compiler and runtime
+errors, cancellation, service failures, and the C and Python analysis inspectors.
 
 The S21 verification on Ubuntu 24.04 under WSL 2 passed all 11 browser
 workflows twice with `npm run test:e2e -- --repeat-each=2`. The same checkout
