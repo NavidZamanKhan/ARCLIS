@@ -219,8 +219,8 @@ export function Workspace({ hidden, layout, onResize, showPanel, theme, toolbar,
       download.remove();
       setTimeout(() => URL.revokeObjectURL(url), 0);
     } else if (type === 'set-target') {
-      updateProject((state) => ({ ...state, targetId: item.id }));
-      setFeedback({ message: 'Execution target set to ' + item.path + '.' });
+      selectFile(item.id);
+      setFeedback({ message: 'Ready to run ' + item.path + '.' });
     } else if (type === 'copy-path') {
       try {
         await navigator.clipboard.writeText(item.path);
@@ -282,10 +282,7 @@ export function Workspace({ hidden, layout, onResize, showPanel, theme, toolbar,
       additions.push(type === 'new-file'
         ? { kind: 'file', path, content: templateContent(path, template), ...(sumTemplate && { sumTemplate }) }
         : { kind: 'folder', path });
-      updateProject((state) => {
-        const next = addEntries(state, additions);
-        return sumTemplate ? { ...next, targetId: next.activeId } : next;
-      });
+      updateProject((state) => addEntries(state, additions));
       if (folder) setReveal({ path: folder });
     }
   }
@@ -402,8 +399,8 @@ export function Workspace({ hidden, layout, onResize, showPanel, theme, toolbar,
           {splitter('inspector')}
           <WorkspaceInspector
             file={activeFile} lineCount={lineCount} readContent={readContent}
-            files={quick ? [] : files} targetId={project.targetId}
-            selectTarget={(targetId) => updateProject((state) => ({ ...state, targetId }))}
+            files={quick ? [] : files} targetId={entry?.id}
+            selectTarget={selectFile}
             preferences={preferences} visible={visibleLayout.inspector.visible}
             setPreference={(key, value) => setPreferences((previous) => ({ ...previous, [key]: value }))}
             resetPreferences={() => setPreferences(editorDefaults)}

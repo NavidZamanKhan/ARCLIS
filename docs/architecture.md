@@ -26,8 +26,9 @@ flowchart LR
 | [`examples/`](../examples/) | Academic demonstration source files |
 
 Quick Run chooses a toolchain and canonical filename from the language
-selector and submits that single source file. Projects infer the entry if
-there is one runnable file and offer an entry chooser when several qualify.
+selector and submits that single source file. Projects use the open runnable
+source as the entry file and fall back to the saved entry from a header or
+closed editor. The entry chooser opens the selected source.
 Run and Analyze capture the current Monaco model before making the request.
 Source-linked diagnostics reference that snapshot. IndexedDB preserves Quick
 Run drafts separately from the existing project record, which stores files,
@@ -108,8 +109,9 @@ The execution WebSocket accepts `{"type":"stdin","data":"7\n"}`,
 reports the final state, `exit_code`, and `execution_time_ms`. Exit code can be
 null if no native process exit was available. An optional positive safe
 integer `request_id` on stdin and EOF messages requests `input_ack` on
-acceptance or a correlated `stdin_rejected` error. The browser stages input
-locally until Enter and echoes it after acceptance by the worker's input queue.
+acceptance or a correlated `stdin_rejected` error. The browser echoes the
+input in the terminal while it is edited and sends a line on Enter. The
+line becomes part of the transcript after the worker's input queue accepts it.
 The worker sends input to the program through standard streams. The browser
 console supports line editing and EOF over those streams, with a 30-second
 inactivity limit. Worker startup can return `worker_unavailable` with a safe

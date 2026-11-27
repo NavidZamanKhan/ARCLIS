@@ -158,8 +158,8 @@ selection. Use **Examples** to insert a sample explicitly.
 
 Start the [loopback backend](#interactive-sessions-on-loopback), then select
 **Run**. ARCLIS submits the current editor contents to `http://127.0.0.1:8000`.
-When the program prompts, type in **Console** and press Enter. Paste stages
-text and Enter submits one line at a time. Use Ctrl+D or **Send EOF** to
+When the program prompts, type at the cursor in **Console** and press Enter.
+Pasted text appears one line at a time as you submit it. Use Ctrl+D or **Send EOF** to
 close standard input after sending the staged text. **Stop** cancels the run.
 An interactive run times out after 30 seconds without submitted input or
 program output. Flush prompts from your program when it writes them without
@@ -177,10 +177,11 @@ context menu to manage files. The browser stores Projects and Quick Run drafts
 in separate IndexedDB records. Download a project file to keep a separate
 copy of its current contents.
 
-A project with one runnable file uses it automatically. When multiple files
-can run, choose **Execution target** in the inspector or use the file's
-context menu. C and C++ runs compile compatible sources in the entry file's
-folder and can include compatible headers from the workspace. Java uses the
+**Run** follows the open runnable source file. While editing a header, the
+project uses its selected entry file. Choosing an **Execution target** in
+the inspector or a file's context menu opens that source. A project with
+one runnable file uses it automatically. C and C++ runs compile compatible
+sources in the entry file's folder and can include headers from the workspace. Java uses the
 entry file's folder path and filename to derive its main class. Java and
 Python runs include project files of the selected language. Uploads accept
 UTF-8 source files, up to 1 MiB per upload and 50 source files per project.

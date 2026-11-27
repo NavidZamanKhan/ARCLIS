@@ -1209,22 +1209,6 @@
   min-inline-size: min(100%, 14rem);
 }
 
-.terminal-draft {
-  max-block-size: 32%;
-  overflow: auto;
-  margin: 0 var(--space-2) var(--space-1);
-  padding: var(--space-1) var(--space-2);
-  border: 1px solid var(--border-control);
-  border-radius: var(--control-radius);
-  background: var(--surface-workspace);
-  font-family: var(--code-font);
-  font-size: 0.8125rem;
-}
-
-.terminal-draft pre {
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
 .console-notice {
   padding-inline: var(--space-3);
   color: var(--text-secondary);

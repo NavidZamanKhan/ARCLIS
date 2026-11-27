@@ -52,6 +52,7 @@ print(f"Hello, {name}. You are {age} years old.")`,
 ];
 
 const consoleRows = (page) => page.locator('.xterm-rows');
+const consoleLine = (page, prompt) => consoleRows(page).locator(':scope > div').filter({ hasText: prompt });
 const status = (page) => page.getByRole('status', { name: 'Execution status' });
 const language = (page) => page.getByLabel('Programming language');
 
@@ -99,7 +100,10 @@ for (const [label, code, file, content, prompts, output] of modes) {
       const terminal = page.locator('.xterm-screen');
       await terminal.click({ position: { x: 6, y: 8 } });
       await page.keyboard.type(input + 'x');
+      await expect(consoleLine(page, prompt)).toContainText(prompt + ' ' + input + 'x');
       await page.keyboard.press('Backspace');
+      await expect(consoleLine(page, prompt)).toContainText(prompt + ' ' + input);
+      await expect(consoleLine(page, prompt)).not.toContainText(input + 'x');
       await page.keyboard.press('Enter');
     }
     await expect(consoleRows(page)).toContainText(output);
@@ -153,17 +157,20 @@ test('stages pasted input, submits one line at a time, and closes stdin on Ctrl+
   await page.keyboard.press('Control+v');
   await page.keyboard.press('Enter');
   await expect(page.getByRole('region', { name: 'Debug' }).getByRole('alert')).toContainText('4096');
-  await expect(page.getByLabel('Staged input')).toHaveText('x'.repeat(4096));
+  await expect(consoleLine(page, 'first?')).toContainText('first? xxxx');
   expect(packets).toHaveLength(0);
   await page.getByRole('button', { name: 'Clear staged input' }).click();
   await page.evaluate(() => navigator.clipboard.writeText('first\nsecond'));
   await page.locator('.xterm-screen').click({ position: { x: 6, y: 8 } });
   await page.keyboard.press('Control+v');
-  await expect(page.getByLabel('Staged input')).toHaveText('first second');
+  await expect(consoleLine(page, 'first?')).toHaveText('first? first');
+  await page.setViewportSize({ width: 1000, height: 800 });
+  await expect(consoleLine(page, 'first?')).toHaveText('first? first');
+  await expect(page.getByText('More pasted input is queued.')).toBeVisible();
   expect(packets).toHaveLength(0);
   await page.keyboard.press('Enter');
-  await expect(consoleRows(page)).toContainText('second?');
-  await expect(page.getByLabel('Staged input')).toHaveText('second');
+  await expect(consoleLine(page, 'second?')).toContainText('second? second');
+  await expect(consoleLine(page, 'first?')).toHaveText('first? first');
   expect(packets).toMatchObject([{ type: 'stdin', data: 'first\n' }]);
   await page.keyboard.press('ArrowUp');
   await page.keyboard.press('Enter');

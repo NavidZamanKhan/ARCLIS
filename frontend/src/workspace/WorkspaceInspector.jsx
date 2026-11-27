@@ -97,7 +97,7 @@ export function WorkspaceInspector({
               <label>
                 Execution target
                 <select value={targetId ?? ''} onChange={(event) => selectTarget(Number(event.target.value) || null)}>
-                  <option value="">Choose entry file</option>
+                  <option value="" disabled>Choose entry file</option>
                   {files.filter(executionTarget).map((target) => <option key={target.id} value={target.id}>{target.path}</option>)}
                 </select>
               </label>

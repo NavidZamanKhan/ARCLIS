@@ -287,7 +287,7 @@ it('creates a nested template, retains tab identity on rename and clears a delet
     await user.click(deletion.getByRole('button', { name: 'Delete' }));
     expect(screen.queryByRole('button', { name: 'Close tools/main.py' })).toBeNull();
     expect(currentPath()).toBe('main.c');
-    expect(select.value).toBe('');
+    expect(select.value).toBe(within(select).getByRole('option', { name: 'main.c' }).value);
   } finally {
     restore();
   }
@@ -312,7 +312,7 @@ it('supports keyboard file actions and reopens a closed file from the jump bar',
   expect(screen.getByLabelText('C source editor')).toBeDefined();
 });
 
-it('enables Run for the selected target independently of the editor tab', async () => {
+it('runs the open source file and opens a file chosen through the entry selector', async () => {
   const user = userEvent.setup();
   render(<App />);
   await enterProjects(user, true);
@@ -322,12 +322,13 @@ it('enables Run for the selected target independently of the editor tab', async 
   expect(run.title).toBe('Run main.c');
   expect(stop.disabled).toBe(true);
 
-  await user.selectOptions(target, '');
-  expect(run.disabled).toBe(true);
   await user.selectOptions(target, within(target).getByRole('option', { name: 'main.py' }).value);
   expect(run.disabled).toBe(false);
   expect(run.title).toBe('Run main.py');
-  expect(screen.getByLabelText('C source editor')).toBeDefined();
+  expect(screen.getByLabelText('Python source editor')).toBeDefined();
+  await user.click(screen.getByRole('button', { name: 'main.cpp, C++', exact: true }));
+  expect(run.title).toBe('Run main.cpp');
+  expect(target.value).toBe(within(target).getByRole('option', { name: 'main.cpp' }).value);
 });
 
 it('opens workspace search by shortcut and sends cross-file matches to the editor', async () => {
@@ -347,6 +348,5 @@ it('opens workspace search by shortcut and sends cross-file matches to the edito
     expect.objectContaining({ path: 'Main.java', line: 7, length: 7 }),
   );
   await user.click(screen.getByRole('button', { name: 'Build', exact: true }));
-  expect(screen.getByText('GCC')).toBeDefined();
-  expect(screen.getByText('C17')).toBeDefined();
+  expect(screen.getByText('javac (OpenJDK 21)')).toBeDefined();
 });

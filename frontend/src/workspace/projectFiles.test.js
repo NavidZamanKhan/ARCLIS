@@ -2,13 +2,20 @@ import { describe, expect, it } from 'vitest';
 
 import {
   addEntries, closeTab, createProject, deleteEntry, executionTarget, joinPath,
-  openFile, readUploads, renameEntry, restoreProject, templateContent,
+  openFile, projectEntry, readUploads, renameEntry, restoreProject, templateContent,
 } from './projectFiles.js';
 
 const folder = (path) => ({ kind: 'folder', path });
 const file = (path, content = '') => ({ kind: 'file', path, content });
 
 describe('project file operations', () => {
+  it('uses the active runnable file in older workspaces with a different saved target', () => {
+    const project = restoreProject({ ...createProject(), activeId: 2, tabs: [2, 4], targetId: 4 });
+    expect(projectEntry(project).path).toBe('main.cpp');
+    const withHeader = addEntries(project, [file('helpers.h')]);
+    expect(projectEntry(withHeader).path).toBe('main.cpp');
+  });
+
   it('restores only valid tab and target references while preserving current text', () => {
     const project = addEntries(createProject(), [folder('src'), file('src/module.py', '\uFEFFprint(2)\r\n')]);
     const restored = restoreProject({

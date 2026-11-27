@@ -71,6 +71,19 @@ async function expectEditorFocus(page) {
   await expect.poll(() => page.evaluate(() => Boolean(document.activeElement?.closest('.monaco-editor')))).toBe(true);
 }
 
+test('Run follows the visible C++ tab after choosing Python in Projects', async ({ page }) => {
+  await launch(page);
+  await selectTarget(page, 'main.py');
+  await expect(runButton(page)).toHaveAttribute('title', 'Run main.py');
+  await openFile(page, 'main.cpp', 'C++');
+  await expect(runButton(page)).toHaveAttribute('title', 'Run main.cpp');
+  const request = page.waitForRequest((item) => item.method() === 'POST' && item.url().endsWith('/api/v1/executions/'));
+  await runButton(page).click();
+  expect((await request).postDataJSON()).toMatchObject({ language: 'cpp', entry_file: 'main.cpp' });
+  await consoleContains(page, 'Sum: 55');
+  await expect(status(page)).toHaveText('Completed');
+});
+
 for (const fixture of interactivePrograms) {
   test(`${fixture.language} runs a multi-file program with two input lines and EOF`, async ({ page }) => {
     await launch(page);

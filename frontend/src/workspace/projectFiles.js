@@ -60,6 +60,8 @@ export function executionTarget(file) {
 }
 
 export function projectEntry(project) {
+  const active = project.entries.find((entry) => entry.id === project.activeId);
+  if (executionTarget(active)) return active;
   const selected = project.entries.find((entry) => entry.id === project.targetId);
   if (executionTarget(selected)) return selected;
   const candidates = project.entries.filter(executionTarget);
@@ -144,9 +146,11 @@ export function restoreProject(saved) {
 }
 
 export function openFile(project, id) {
-  if (!project.entries.some((entry) => entry.id === id && entry.kind === 'file')) return project;
+  const file = project.entries.find((entry) => entry.id === id && entry.kind === 'file');
+  if (!file) return project;
   const tabs = project.tabs.includes(id) ? project.tabs : [...project.tabs, id];
-  return { ...project, tabs, activeId: id };
+  const targetId = executionTarget(file) ? id : projectEntry(project)?.id ?? null;
+  return { ...project, tabs, activeId: id, targetId };
 }
 
 export function closeTab(project, id) {

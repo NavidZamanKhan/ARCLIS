@@ -19,6 +19,8 @@ function ProgramConsole({ execution, theme, visible }) {
   const current = () => latest.current?.sequence === run.sequence
     ? latest.current : { sequence: run.sequence, text: '', pending: null, error: '' };
   const shown = draft?.sequence === run.sequence ? draft : null;
+  const line = shown?.pending?.line ?? shown?.text.split('\n', 1)[0] ?? '';
+  const moreInput = shown?.text.includes('\n') || (shown?.pending && shown.text);
 
   function update(next) {
     latest.current = next;
@@ -75,21 +77,16 @@ function ProgramConsole({ execution, theme, visible }) {
   return (
     <>
       <div className="terminal-frame">
-        {(active || run.frames.length > 0) && (
+        {(active || run.frames.length > 0 || line) && (
           <Suspense fallback={<p className="debug-empty">Opening console…</p>}>
-            <TerminalSurface frames={run.frames} theme={theme} visible={visible}
+            <TerminalSurface frames={run.frames} draft={line} theme={theme} visible={visible}
               inputEnabled={enabled} onInput={stage} onKey={key} />
           </Suspense>
         )}
-        {!run.frames.length && !active && <p className="debug-empty">No program output.</p>}
-        {(shown?.text || shown?.pending) && (
-          <div className="terminal-draft">
-            {shown.pending && <span>{shown.pending.eof ? 'Sending EOF…' : 'Sending input…'}</span>}
-            {shown.text && <pre aria-label="Staged input">{shown.text}</pre>}
-          </div>
-        )}
+        {!run.frames.length && !active && !line && <p className="debug-empty">No program output.</p>}
       </div>
       {shown?.error && <p className="console-notice" role="alert">{shown.error}</p>}
+      {enabled && moreInput && <p className="console-notice">More pasted input is queued.</p>}
       <div className="console-input">
         {enabled && <span>Type in the console. Enter sends a line. Inactivity limit is 30 seconds.</span>}
         {run.inputClosed && <span>Input closed.</span>}
