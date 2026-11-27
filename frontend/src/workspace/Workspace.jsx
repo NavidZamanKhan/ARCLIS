@@ -198,6 +198,7 @@ export function Workspace({ hidden, layout, onResize, showPanel, theme, toolbar,
       setQuickOpen(true);
     } else if (key === 'enter') {
       event.preventDefault();
+      event.stopPropagation();
       if (event.shiftKey) execution.stop();
       else runTarget();
     }

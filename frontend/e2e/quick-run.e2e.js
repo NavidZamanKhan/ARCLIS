@@ -65,9 +65,9 @@ async function replaceSource(page, source) {
   await page.keyboard.press('Control+v');
 }
 
-async function run(page, code, file, content) {
+async function run(page, code, file, content, start = () => page.getByRole('button', { name: 'Run', exact: true }).click()) {
   const request = page.waitForRequest((item) => item.method() === 'POST' && item.url().endsWith('/api/v1/executions/'));
-  await page.getByRole('button', { name: 'Run', exact: true }).click();
+  await start();
   const body = (await request).postDataJSON();
   expect(body).toMatchObject({ language: code, entry_file: file, files: [{ path: file, content }] });
   if (code === 'java') expect(body.main_class).toBe('Main');
@@ -123,7 +123,8 @@ test('Run reads immediate edits and restores each language draft after refresh',
   await expect(status(page)).toHaveText('Completed');
   await expect(consoleRows(page)).toContainText('first-audit-source');
   await replaceSource(page, second);
-  await run(page, 'python', 'main.py', second);
+  await run(page, 'python', 'main.py', second, () => page.keyboard.press('Control+Enter'));
+  await expect(page.locator('.source-editor-host .view-line')).toHaveCount(1);
   await expect(status(page)).toHaveText('Completed');
   await expect(consoleRows(page)).toContainText('second-audit-source');
   await expect(consoleRows(page)).not.toContainText('first-audit-source');
@@ -195,7 +196,7 @@ test('keeps Projects and Quick Run drafts independent through edits and reload',
   await page.getByLabel('Name', { exact: true }).fill('solo.py');
   await page.getByRole('button', { name: 'Create', exact: true }).click();
   await expect(page.getByLabel('Execution target')).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Run', exact: true })).toHaveAttribute('title', 'Run solo.py');
+  await expect(page.getByRole('button', { name: 'Run', exact: true })).toHaveAttribute('title', 'Run solo.py (Ctrl+Enter)');
   await replaceSource(page, 'print("project buffer")');
   await page.getByRole('button', { name: 'Quick Run', exact: true }).click();
   await expect(page.locator('.source-editor-host .view-lines')).toContainText('return 23');

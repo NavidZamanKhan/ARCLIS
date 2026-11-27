@@ -23,7 +23,3 @@ COPY --from=frontend /build/dist /srv/arclis
 USER 101:101
 ENTRYPOINT ["nginx", "-g", "daemon off;"]
 CMD []
-
-FROM backend AS railway
-ENV ARCLIS_RAILWAY_DEPLOYMENT=1 DJANGO_SQLITE_PATH=:memory:
-CMD ["sh", "-c", "exec python -m uvicorn config.asgi:application --host 0.0.0.0 --port \"${PORT:?Railway must supply PORT}\" --workers 1 --no-proxy-headers --no-access-log --ws websockets-sansio --ws-max-size 24576 --ws-max-queue 16 --limit-concurrency 64"]

@@ -139,27 +139,6 @@ certificate and key pair together when renewing them and recreate the edge
 container to load the renewed files. Public execution requires dedicated
 worker infrastructure and a separate isolation review, as described below.
 
-## Hosted restricted demo
-
-Railway builds the `railway` target from `deployment/Dockerfile` using
-`railway.json`. It runs one non-root Uvicorn worker on Railway’s injected
-`PORT`. Set `DJANGO_SECRET_KEY` as a backend secret and
-`DJANGO_FRONTEND_ORIGINS` to the exact HTTPS Vercel production origin.
-The backend allows its Railway public domain and the platform health check
-host by default. Use `DJANGO_ALLOWED_HOSTS` to override that list.
-
-The Vercel project uses `frontend` as its root, Node.js 24, and
-`frontend/vercel.json` for the Vite build. Set
-`VITE_ARCLIS_BACKEND_ORIGIN` to the Railway HTTPS origin without a trailing
-slash. The browser uses that origin for the API and the WSS host for
-WebSockets. Only the public origin belongs in the frontend configuration.
-
-Verify `GET /api/v1/health/`, `GET /api/v1/capabilities/`, and the
-`/ws/health/` handshake from the deployed frontend origin. The hosted
-profile enables editor and browser persistence features. Execution and
-analysis require a separately isolated worker that passes the public
-deployment security gate.
-
 ## Run the frontend locally
 
 Open an Ubuntu WSL login shell with Node.js 24.15 or later in the Node 24
@@ -177,8 +156,9 @@ the source filename automatically. For Java, use a class named `Main` without
 a package declaration. The browser restores each language's last draft and
 selection. Use **Examples** to insert a sample explicitly.
 
-Start the [loopback backend](#interactive-sessions-on-loopback), then select
-**Run**. ARCLIS submits the current editor contents to `http://127.0.0.1:8000`.
+Start the [loopback backend](#interactive-sessions-on-loopback), then press
+**Ctrl+Enter** or select **Run**. ARCLIS submits the current editor contents
+to `http://127.0.0.1:8000`.
 When the program prompts, type at the cursor in **Console** and press Enter.
 Pasted text appears one line at a time as you submit it. Use Ctrl+D or **Send EOF** to
 close standard input after sending the staged text. **Stop** cancels the run.

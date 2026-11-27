@@ -125,7 +125,7 @@ export function WorkspaceToolbar({
               {Object.entries(languages).map(([id, label]) => <option key={id} value={id}>{label}</option>)}
             </select>}
             <Button variant="primary" icon={Play} aria-label="Run" title={restricted ? 'Execution is disabled in this demo'
-              : !canRun ? 'Local execution is unavailable' : target ? 'Run ' + target.entry_file : 'Add or choose a project entry file'}
+              : !canRun ? 'Local execution is unavailable' : target ? `Run ${target.entry_file} (Ctrl+Enter)` : 'Add or choose a project entry file'}
               aria-keyshortcuts="Control+Enter Meta+Enter"
               disabled={!canRun || showPreview || !target || execution.active} onClick={runTarget}>Run</Button>
             <Button icon={Square} aria-label="Stop" title="Stop execution"

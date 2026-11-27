@@ -319,15 +319,15 @@ it('runs the open source file and opens a file chosen through the entry selector
   const run = screen.getByRole('button', { name: 'Run' });
   const stop = screen.getByRole('button', { name: 'Stop', exact: true });
   const target = screen.getByLabelText('Execution target');
-  expect(run.title).toBe('Run main.c');
+  expect(run.title).toBe('Run main.c (Ctrl+Enter)');
   expect(stop.disabled).toBe(true);
 
   await user.selectOptions(target, within(target).getByRole('option', { name: 'main.py' }).value);
   expect(run.disabled).toBe(false);
-  expect(run.title).toBe('Run main.py');
+  expect(run.title).toBe('Run main.py (Ctrl+Enter)');
   expect(screen.getByLabelText('Python source editor')).toBeDefined();
   await user.click(screen.getByRole('button', { name: 'main.cpp, C++', exact: true }));
-  expect(run.title).toBe('Run main.cpp');
+  expect(run.title).toBe('Run main.cpp (Ctrl+Enter)');
   expect(target.value).toBe(within(target).getByRole('option', { name: 'main.cpp' }).value);
 });
 

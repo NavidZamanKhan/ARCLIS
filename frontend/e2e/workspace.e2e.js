@@ -74,11 +74,12 @@ async function expectEditorFocus(page) {
 test('Run follows the visible C++ tab after choosing Python in Projects', async ({ page }) => {
   await launch(page);
   await selectTarget(page, 'main.py');
-  await expect(runButton(page)).toHaveAttribute('title', 'Run main.py');
+  await expect(runButton(page)).toHaveAttribute('title', 'Run main.py (Ctrl+Enter)');
   await openFile(page, 'main.cpp', 'C++');
-  await expect(runButton(page)).toHaveAttribute('title', 'Run main.cpp');
+  await expect(runButton(page)).toHaveAttribute('title', 'Run main.cpp (Ctrl+Enter)');
   const request = page.waitForRequest((item) => item.method() === 'POST' && item.url().endsWith('/api/v1/executions/'));
-  await runButton(page).click();
+  await page.locator('.source-editor-host .view-line').first().click();
+  await page.keyboard.press('Control+Enter');
   expect((await request).postDataJSON()).toMatchObject({ language: 'cpp', entry_file: 'main.cpp' });
   await consoleContains(page, 'Sum: 55');
   await expect(status(page)).toHaveText('Completed');
