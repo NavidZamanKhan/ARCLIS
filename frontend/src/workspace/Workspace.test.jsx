@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
 import App from '../App.jsx';
 import { createSourceEditor } from './monaco.js';
@@ -18,21 +18,49 @@ createSourceEditor.mockImplementation((host, scope, onLineCount) => ({
   setPreferences: vi.fn(),
   focus: vi.fn(),
   goToLocation: vi.fn(),
-  goToSymbol: vi.fn(),
+  readSource: vi.fn(),
   runAction: vi.fn(),
   layout: vi.fn(),
   dispose: vi.fn(),
 }));
 
+beforeEach(() => {
+  vi.stubGlobal('fetch', vi.fn(async () => ({
+    ok: true, json: async () => ({ execution: { available: true }, analysis: { available: true } }),
+  })));
+});
+
 afterEach(() => {
   cleanup();
+  vi.unstubAllGlobals();
   localStorage.clear();
   createSourceEditor.mockClear();
 });
 
+async function enterProjects(user, samples = false) {
+  await user.click(screen.getByRole('button', { name: 'Projects', exact: true }));
+  if (!samples) return;
+  const restore = mockDialog();
+  try {
+    await user.click(screen.getByRole('button', { name: 'Project actions' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Reset Workspace' }));
+    const reset = within(screen.getByRole('dialog', { name: 'Reset Workspace' }));
+    await user.click(reset.getByRole('radio', { name: 'Restore sample files' }));
+    await user.click(reset.getByRole('button', { name: 'Reset Workspace' }));
+  } finally {
+    restore();
+  }
+}
+
+async function openPreferences(user) {
+  await user.click(screen.getByRole('button', { name: 'View' }));
+  await user.click(screen.getByRole('button', { name: 'Editor preferences' }));
+}
+
 it('shows the workspace regions and keeps the navigator, editor, and inspector in sync', async () => {
   const user = userEvent.setup();
   render(<App />);
+  await enterProjects(user, true);
 
   expect(screen.getByRole('banner', { name: 'Workspace toolbar' })).toBeDefined();
   expect(screen.getByRole('region', { name: 'Debug' })).toBeDefined();
@@ -46,9 +74,7 @@ it('shows the workspace regions and keeps the navigator, editor, and inspector i
   expect(within(editor).getByLabelText('Java source editor')).toBeDefined();
   expect(inspector.querySelector('dd').textContent).toBe('Main.java');
 
-  await user.click(within(navigator).getByRole('button', { name: 'Symbols' }));
-  await user.click(within(navigator).getByRole('button', { name: 'sumTo' }));
-  expect(createSourceEditor.mock.results[0].value.goToSymbol).toHaveBeenCalledWith('sumTo');
+  expect(within(navigator).queryByRole('button', { name: 'Symbols' })).toBeNull();
 });
 
 it('routes editor actions and saves and restores editor preferences', async () => {
@@ -63,6 +89,7 @@ it('routes editor actions and saves and restores editor preferences', async () =
     ['actions.find'], ['editor.action.startFindReplaceAction'], ['editor.action.gotoLine'],
   ]);
 
+  await openPreferences(user);
   await user.click(screen.getByLabelText('Line numbers'));
   await user.selectOptions(screen.getByLabelText('Indentation'), '2');
   await user.selectOptions(screen.getByLabelText('Font size'), '18');
@@ -76,6 +103,7 @@ it('routes editor actions and saves and restores editor preferences', async () =
   unmount();
   expect(editor.dispose).toHaveBeenCalledOnce();
   render(<App />);
+  await openPreferences(user);
   expect(createSourceEditor.mock.results[1].value.setPreferences).toHaveBeenLastCalledWith(saved);
   expect(screen.getByLabelText('Line numbers').checked).toBe(false);
   expect(screen.getByLabelText('Indentation').value).toBe('2');
@@ -90,6 +118,7 @@ it('routes editor actions and saves and restores editor preferences', async () =
 it('toggles each panel and keeps focus on the control used to hide it', async () => {
   const user = userEvent.setup();
   render(<App />);
+  await enterProjects(user);
 
   for (const [panel, role] of [
     ['Navigator', 'complementary'], ['Inspector', 'complementary'], ['Debug', 'region'],
@@ -116,6 +145,7 @@ function pointer(target, type, position) {
 it('resizes with the pointer and keyboard, respecting each panel’s direction and limits', async () => {
   const user = userEvent.setup();
   render(<App />);
+  await enterProjects(user);
 
   const navigator = screen.getByRole('separator', { name: 'Resize navigator' });
   navigator.focus();
@@ -145,12 +175,13 @@ it('resizes with the pointer and keyboard, respecting each panel’s direction a
 it('dismisses the View menu from the keyboard and keeps the workspace selection across views', async () => {
   const user = userEvent.setup();
   render(<App />);
+  await enterProjects(user, true);
 
   await user.click(screen.getByRole('button', { name: 'Main.java, Java' }));
   const view = screen.getByRole('button', { name: 'View' });
   await user.click(view);
   await user.tab();
-  expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Reset layout…' }));
+  expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Editor preferences' }));
   await user.keyboard('{Escape}');
   expect(view.getAttribute('aria-expanded')).toBe('false');
   expect(document.activeElement).toBe(view);
@@ -186,6 +217,7 @@ it('restores visibility and sizes only after reset confirmation', async () => {
   const restore = mockDialog();
   try {
     render(<App />);
+    await enterProjects(user);
     const view = screen.getByRole('button', { name: 'View' });
     const navigator = screen.getByRole('separator', { name: 'Resize navigator' });
     navigator.focus();
@@ -216,6 +248,7 @@ it('creates a nested template, retains tab identity on rename and clears a delet
   const restore = mockDialog();
   try {
     render(<App />);
+    await enterProjects(user, true);
 
     async function openAction(trigger, label) {
       await user.click(screen.getByRole('button', { name: trigger }));
@@ -263,6 +296,7 @@ it('creates a nested template, retains tab identity on rename and clears a delet
 it('supports keyboard file actions and reopens a closed file from the jump bar', async () => {
   const user = userEvent.setup();
   render(<App />);
+  await enterProjects(user, true);
   const root = screen.getByRole('button', { name: 'Project actions' });
   root.focus();
   await user.keyboard('{Enter}{ArrowDown}');
@@ -281,6 +315,7 @@ it('supports keyboard file actions and reopens a closed file from the jump bar',
 it('enables Run for the selected target independently of the editor tab', async () => {
   const user = userEvent.setup();
   render(<App />);
+  await enterProjects(user, true);
   const run = screen.getByRole('button', { name: 'Run' });
   const stop = screen.getByRole('button', { name: 'Stop', exact: true });
   const target = screen.getByLabelText('Execution target');
@@ -298,6 +333,7 @@ it('enables Run for the selected target independently of the editor tab', async 
 it('opens workspace search by shortcut and sends cross-file matches to the editor', async () => {
   const user = userEvent.setup();
   render(<App />);
+  await enterProjects(user, true);
   await user.click(screen.getByRole('button', { name: 'Navigator panel' }));
   fireEvent.keyDown(window, { key: 'F', ctrlKey: true, shiftKey: true });
   const search = screen.getByRole('searchbox', { name: 'Search workspace' });
@@ -307,7 +343,7 @@ it('opens workspace search by shortcut and sends cross-file matches to the edito
   const result = await screen.findByRole('button', { name: /Main\.java:7:/ });
   await user.click(result);
   expect(screen.getByLabelText('Java source editor')).toBeDefined();
-  expect(createSourceEditor.mock.results[0].value.goToLocation).toHaveBeenLastCalledWith(
+  expect(createSourceEditor.mock.results.at(-1).value.goToLocation).toHaveBeenLastCalledWith(
     expect.objectContaining({ path: 'Main.java', line: 7, length: 7 }),
   );
   await user.click(screen.getByRole('button', { name: 'Build', exact: true }));

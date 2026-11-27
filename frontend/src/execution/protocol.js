@@ -33,12 +33,18 @@ function parsePacket(raw) {
           type: 'result', state: packet.state, exit_code: packet.exit_code,
           execution_time_ms: packet.execution_time_ms,
           message: typeof packet.message === 'string' ? packet.message.slice(0, 512) : '',
+          ...(packet.state === 'INTERNAL_ERROR' && packet.code === 'worker_unavailable' && { code: packet.code }),
         };
       }
       break;
     case 'error':
       if (typeof packet.message === 'string') {
-        return { type: 'error', code: packet.code, message: packet.message.slice(0, 512) };
+        return { type: 'error', code: packet.code, message: packet.message.slice(0, 512), request_id: packet.request_id };
+      }
+      break;
+    case 'input_ack':
+      if (Number.isSafeInteger(packet.request_id) && packet.request_id > 0) {
+        return { type: 'input_ack', request_id: packet.request_id };
       }
       break;
     default:
@@ -80,6 +86,7 @@ export function createExecutionClient(onEvent, { request = globalThis.fetch, Soc
   function release(attempt) {
     active = null;
     clearTimeout(attempt.timer);
+    settleInput(attempt, 'The run ended before input acceptance was confirmed.');
     attempt.abort.abort();
     const socket = attempt.socket;
     if (socket && socket.readyState < 2) socket.close();
@@ -111,17 +118,41 @@ export function createExecutionClient(onEvent, { request = globalThis.fetch, Soc
     }
   }
 
-  function endInput() {
+  function settleInput(attempt, message) {
+    const pending = attempt.pendingInput;
+    if (!pending) return;
+    attempt.pendingInput = null;
+    clearTimeout(pending.timer);
+    if (!message && pending.packet.type === 'eof') {
+      attempt.inputClosed = true;
+      onEvent({ type: 'input-closed' });
+    } else if (!message) {
+      onEvent({ type: 'input-accepted', data: printableOutput(pending.packet.data) });
+    }
+    pending.resolve(message);
+  }
+
+  async function submitInput(packet) {
     if (!active?.running || active.stopping || active.inputClosed) return 'Standard input is unavailable.';
-    if (!send(active, { type: 'eof' })) return 'End of input could not be sent.';
-    active.inputClosed = true;
-    onEvent({ type: 'input-closed' });
-    return '';
+    const attempt = active;
+    if (attempt.pendingInput) return 'Waiting for the previous input to be accepted.';
+    const message = { ...packet, request_id: ++attempt.inputSequence };
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => failure(attempt, 'The server did not confirm input acceptance.'), 5000);
+      attempt.pendingInput = { packet: message, resolve, timer };
+      if (!send(attempt, message)) settleInput(attempt, 'The input could not be sent.');
+    });
+  }
+
+  function endInput() {
+    return submitInput({ type: 'eof' });
   }
 
   async function start(payload, testCase = null) {
     if (active) return;
-    const attempt = { abort: new AbortController(), running: false, inputClosed: false, stopping: false };
+    const attempt = {
+      abort: new AbortController(), running: false, inputClosed: false, stopping: false, inputSequence: 0,
+    };
     active = attempt;
     onEvent({ type: 'start', target: { language: payload.language, entry_file: payload.entry_file }, ...(testCase && { testCase }) });
     deadline(attempt, 15000, 'Timed out connecting to the local execution server.');
@@ -176,11 +207,16 @@ export function createExecutionClient(onEvent, { request = globalThis.fetch, Soc
           if (attempt.stopping && packet.state !== 'CANCELLING') return;
           attempt.running = packet.state === 'RUNNING';
         }
-        if (packet.type === 'error' && packet.code === 'stdin_rejected') attempt.inputClosed = false;
+        if (packet.type === 'input_ack' || (packet.type === 'error' && packet.request_id !== undefined)) {
+          if (attempt.pendingInput && packet.request_id === attempt.pendingInput.packet.request_id) {
+            settleInput(attempt, packet.type === 'error' ? packet.message : '');
+          }
+          return;
+        }
         onEvent(packet);
-        if (testCase && packet.type === 'status' && packet.state === 'RUNNING' && !attempt.inputClosed) {
-          const problem = endInput();
-          if (problem) failure(attempt, problem);
+        if (testCase && packet.type === 'status' && packet.state === 'RUNNING'
+          && !attempt.inputClosed && !attempt.pendingInput) {
+          void endInput().then((problem) => { if (problem) failure(attempt, problem); });
         }
       });
       socket.addEventListener('error', () => failure(attempt, 'Could not connect to the local execution socket.'));
@@ -207,12 +243,10 @@ export function createExecutionClient(onEvent, { request = globalThis.fetch, Soc
       onEvent({ type: 'status', state: 'CANCELLING' });
       deadline(attempt, 10000, 'The server did not confirm cancellation. The local execution socket was closed.');
     },
-    input(line) {
-      if (!active?.running || active.stopping || active.inputClosed) return 'Standard input is unavailable.';
+    async input(line) {
       const data = line + '\n';
       if (encoder.encode(data).length > 4096) return 'Each input line is limited to 4096 UTF-8 bytes including the newline.';
-      if (!send(active, { type: 'stdin', data })) return 'The input could not be sent.';
-      return '';
+      return submitInput({ type: 'stdin', data });
     },
     endInput,
     dispose() {

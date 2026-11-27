@@ -9,13 +9,13 @@ const fileModes = {
   c: 'c', h: 'c', cc: 'cpp', cpp: 'cpp', cxx: 'cpp', hh: 'cpp', hpp: 'cpp', hxx: 'cpp',
   java: 'java', py: 'python',
 };
-const templateFiles = { c: 'main.c', cpp: 'main.cpp', java: 'Main.java', python: 'main.py' };
+export const sourceFilenames = { c: 'main.c', cpp: 'main.cpp', java: 'Main.java', python: 'main.py' };
 const sampleSymbols = {
   c: ['sum_to', 'main'], cpp: ['sum_to', 'main'], java: ['Main', 'sumTo', 'main'], python: ['sum_to'],
 };
 
 export const languages = { c: 'C', cpp: 'C++', java: 'Java', python: 'Python' };
-export const templates = Object.entries(templateFiles).flatMap(([language, name]) => [
+export const templates = Object.entries(sourceFilenames).flatMap(([language, name]) => [
   { id: language, language, name, label: languages[language] },
   { id: language + '-sum', language, name, label: languages[language] + ' · Two-number sum' },
 ]);
@@ -57,6 +57,13 @@ export function executionTarget(file) {
       : null;
   }
   return ['c', 'cc', 'cpp', 'cxx', 'py'].includes(suffix) ? { language, entry_file: file.path } : null;
+}
+
+export function projectEntry(project) {
+  const selected = project.entries.find((entry) => entry.id === project.targetId);
+  if (executionTarget(selected)) return selected;
+  const candidates = project.entries.filter(executionTarget);
+  return candidates.length === 1 ? candidates[0] : null;
 }
 
 export function templateContent(path, template) {
@@ -109,7 +116,7 @@ export function restoreProject(saved) {
   }
   const ids = new Set();
   const files = new Map();
-  const entries = saved.entries.map(({ id, kind, path, content, symbols } = {}) => {
+  const entries = saved.entries.map(({ id, kind, path, content, symbols, sumTemplate } = {}) => {
     if (!Number.isSafeInteger(id) || id < 1 || id > Number.MAX_SAFE_INTEGER - 100 || ids.has(id)
       || typeof path !== 'string' || (kind !== 'file' && kind !== 'folder')
       || (kind === 'file' && typeof content !== 'string')) {
@@ -118,6 +125,10 @@ export function restoreProject(saved) {
     ids.add(id);
     if (kind === 'folder') return { id, kind, path };
     const entry = { id, kind, path, content };
+    const target = executionTarget(entry);
+    if (sumTemplate === true || (target && content === templateContent(path, target.language + '-sum'))) {
+      entry.sumTemplate = true;
+    }
     if (Array.isArray(symbols) && symbols.every((symbol) => typeof symbol === 'string')) entry.symbols = symbols;
     files.set(id, entry);
     return entry;

@@ -85,6 +85,17 @@ export function createSourceEditor(host, scope, onLineCount, onFileEdited) {
 
   return {
     syncFiles,
+    readSource(id) {
+      return models.get(id)?.model.getValue(undefined, true);
+    },
+    replaceSource(content) {
+      const model = instance.getModel();
+      if (!model) return;
+      instance.pushUndoStop();
+      instance.executeEdits('example', [{ range: model.getFullModelRange(), text: content }]);
+      instance.pushUndoStop();
+      instance.focus();
+    },
     setPreferences(preferences) {
       const { lineNumbers, fontSize, wordWrap, minimap } = preferences;
       tabSize = preferences.tabSize;
@@ -103,17 +114,6 @@ export function createSourceEditor(host, scope, onLineCount, onFileEdited) {
     runAction(id) {
       instance.focus();
       return instance.getAction(id)?.run();
-    },
-    goToSymbol(symbol) {
-      const model = instance.getModel();
-      if (!model) return;
-      const separators = instance.getOption(editor.EditorOption.wordSeparators);
-      const [match] = model.findMatches(symbol, false, false, true, separators, false, 1);
-      if (match) {
-        instance.setSelection(match.range);
-        instance.revealRangeInCenterIfOutsideViewport(match.range);
-      }
-      instance.focus();
     },
     goToLocation({ id, line, column, length = 1, endLine = line, endColumn = column + length }) {
       if (id !== activeId) return;

@@ -34,5 +34,5 @@ it('collects Java package files and Python modules and respects the byte limit',
   const python = makeExecutionPayload(project.entries, 4, read);
   expect(python.files.map(({ path }) => path)).toEqual(['main.py', 'pkg/module.py']);
   expect(() => makeExecutionPayload(project.entries, 4, () => 'π'.repeat(524289))).toThrow('1 MiB');
-  expect(() => makeExecutionPayload(project.entries, null, read)).toThrow('Select an execution target');
+  expect(() => makeExecutionPayload(project.entries, null, read)).toThrow('Choose a runnable project entry file');
 });

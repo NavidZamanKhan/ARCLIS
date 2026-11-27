@@ -9,7 +9,7 @@ vi.mock('./monaco.js', () => ({ createSourceEditor: vi.fn() }));
 
 createSourceEditor.mockImplementation(() => ({
   syncFiles: vi.fn(), setTheme: vi.fn(), setPreferences: vi.fn(), goToLocation: vi.fn(),
-  goToSymbol: vi.fn(), runAction: vi.fn(), layout: vi.fn(), dispose: vi.fn(),
+  readSource: vi.fn(), runAction: vi.fn(), layout: vi.fn(), dispose: vi.fn(),
 }));
 
 const point = (line, column) => ({ line, column, offset: 0 });
@@ -31,7 +31,13 @@ function json(data, status = 200) {
 
 function edit(source) {
   const [, , , onFileEdited] = createSourceEditor.mock.calls[0];
-  act(() => onFileEdited(1, true, source));
+  act(() => onFileEdited(-1, true, source));
+}
+
+function mockAnalysis(fetchAnalysis) {
+  vi.stubGlobal('fetch', (url, options) => String(url).endsWith('/api/v1/capabilities/')
+    ? Promise.resolve(json({ execution: { available: true }, analysis: { available: true } }))
+    : fetchAnalysis(url, options));
 }
 
 afterEach(() => {
@@ -44,7 +50,7 @@ afterEach(() => {
 it('submits the active live buffer and shows navigable tokens, AST, symbols and IR', async () => {
   const user = userEvent.setup();
   const fetch = vi.fn().mockResolvedValue(json(report));
-  vi.stubGlobal('fetch', fetch);
+  mockAnalysis(fetch);
   render(<App />);
   const source = 'int main(void) { return 7; }';
   edit(source);
@@ -59,7 +65,7 @@ it('submits the active live buffer and shows navigable tokens, AST, symbols and 
 
   const editor = createSourceEditor.mock.results[0].value;
   await user.click(within(panel).getByRole('button', { name: /int.*keyword/ }));
-  expect(editor.goToLocation).toHaveBeenLastCalledWith({ id: 1, line: 1, column: 1, endLine: 1, endColumn: 4 });
+  expect(editor.goToLocation).toHaveBeenLastCalledWith({ id: -1, line: 1, column: 1, endLine: 1, endColumn: 4 });
   await user.click(within(panel).getByRole('button', { name: 'AST', exact: true }));
   await user.click(within(panel).getByRole('button', { name: 'Expand FunctionDeclaration' }));
   await user.click(within(panel).getByRole('button', { name: /Block.*body/ }));
@@ -79,7 +85,7 @@ it('maps semantic diagnostics to UTF-16 editor ranges and removes stale markers 
     range: range(2, column, 7),
   };
   const fetch = vi.fn().mockResolvedValue(json({ ...report, semantic_valid: false, ir: null, diagnostics: [diagnostic] }));
-  vi.stubGlobal('fetch', fetch);
+  mockAnalysis(fetch);
   render(<App />);
   edit(source);
   await user.click(screen.getByRole('button', { name: 'Analyze', exact: true }));
@@ -87,15 +93,15 @@ it('maps semantic diagnostics to UTF-16 editor ranges and removes stale markers 
   const item = await within(panel).findByRole('button', { name: /Identifier has no visible declaration/ });
   await user.click(item);
   const editor = createSourceEditor.mock.results[0].value;
-  expect(editor.goToLocation).toHaveBeenLastCalledWith({ id: 1, line: 2, column: 21, endLine: 2, endColumn: 28 });
+  expect(editor.goToLocation).toHaveBeenLastCalledWith({ id: -1, line: 2, column: 21, endLine: 2, endColumn: 28 });
   expect(editor.syncFiles.mock.lastCall[2]['main.c'][0]).toMatchObject({ startColumn: 21, endColumn: 28 });
   edit(source.replace('missing', '0'));
   expect(within(panel).getByText(/Results are stale/)).toBeDefined();
   expect(item.disabled).toBe(true);
   expect(editor.syncFiles.mock.lastCall[2]['main.c']).toBeUndefined();
   expect(screen.getByRole('button', { name: 'Run', exact: true }).disabled).toBe(false);
-  await user.click(screen.getByRole('button', { name: 'Main.java, Java' }));
-  expect(screen.getByRole('button', { name: 'Analyze', exact: true }).disabled).toBe(true);
+  await user.selectOptions(screen.getByLabelText('Programming language'), 'java');
+  expect(screen.queryByRole('button', { name: 'Analyze', exact: true })).toBeNull();
 });
 
 it('keeps an in-flight response tied to the submitted snapshot and shows service errors', async () => {
@@ -103,7 +109,7 @@ it('keeps an in-flight response tied to the submitted snapshot and shows service
   let finish;
   const fetch = vi.fn().mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }))
     .mockResolvedValueOnce(json(null, 404));
-  vi.stubGlobal('fetch', fetch);
+  mockAnalysis(fetch);
   render(<App />);
   const button = screen.getByRole('button', { name: 'Analyze', exact: true });
   await user.click(button);
@@ -130,9 +136,9 @@ it('labels native Python analysis, shows real node shapes and explains unavailab
     symbols: [{ name: 'value', scope: 1, flags: ['parameter', 'referenced'], range: range(1, 1, 0) }],
   };
   const fetch = vi.fn().mockResolvedValue(json(python));
-  vi.stubGlobal('fetch', fetch);
+  mockAnalysis(fetch);
   render(<App />);
-  await user.click(screen.getByRole('button', { name: 'main.py, Python' }));
+  await user.selectOptions(screen.getByLabelText('Programming language'), 'python');
   const analyze = screen.getByRole('button', { name: 'Analyze', exact: true });
   expect(analyze.disabled).toBe(false);
   await user.click(analyze);
@@ -147,9 +153,8 @@ it('labels native Python analysis, shows real node shapes and explains unavailab
   expect(within(panel).getByText(/parameter, referenced.*function #1/)).toBeDefined();
   await user.click(within(panel).getByRole('button', { name: 'IR', exact: true }));
   expect(within(panel).getByText('Intermediate code is unavailable for Python analysis.')).toBeDefined();
-  for (const file of ['Main.java, Java', 'main.cpp, C++']) {
-    await user.click(screen.getByRole('button', { name: file }));
-    expect(analyze.disabled).toBe(true);
-    expect(analyze.title).toBe('Analysis is available for C and Python files');
+  for (const language of ['java', 'cpp']) {
+    await user.selectOptions(screen.getByLabelText('Programming language'), language);
+    expect(screen.queryByRole('button', { name: 'Analyze', exact: true })).toBeNull();
   }
 });

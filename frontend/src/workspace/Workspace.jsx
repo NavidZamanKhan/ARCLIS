@@ -11,6 +11,7 @@ import { ProjectNavigator } from './ProjectNavigator.jsx';
 import { QuickOpen } from './QuickOpen.jsx';
 import { SourceEditor } from './SourceEditor.jsx';
 import { Splitter } from './Splitter.jsx';
+import { createQuickRun, quickRunStorage } from './quickRun.js';
 import { WorkspaceInspector } from './WorkspaceInspector.jsx';
 import { WorkspaceToolbar } from './WorkspaceToolbar.jsx';
 import { editorDefaults, readEditorPreferences, saveEditorPreferences } from './editorPreferences.js';
@@ -19,7 +20,7 @@ import { currentIssues, issueMarkers, readBuildIssues } from './sourceLocations.
 import { useWorkspaceProject } from './useWorkspaceProject.js';
 import {
   addEntries, basename, closeTab, createProject, deleteEntry, executionTarget, fileMode,
-  joinPath, openFile, parentPath, ProjectFileError, readUploads, renameEntry, templateContent,
+  joinPath, openFile, parentPath, projectEntry, ProjectFileError, readUploads, renameEntry, templateContent,
 } from './projectFiles.js';
 
 const emptyMarkers = {};
@@ -30,9 +31,15 @@ export function Workspace({ hidden, layout, onResize, showPanel, theme, toolbar,
   const uploadInput = useRef(null);
   const uploadFolder = useRef(null);
   const uploadGeneration = useRef(0);
+  const [quick, setQuick] = useState(true);
+  const [quickDebug, setQuickDebug] = useState(true);
+  const [quickInspector, setQuickInspector] = useState(false);
+  const [exampleOpen, setExampleOpen] = useState(false);
+  const projects = useWorkspaceProject();
+  const quickRun = useWorkspaceProject(quickRunStorage, createQuickRun);
   const {
     project, currentProject, modified, markFile, readContent, contentVersion, updateProject, saveNow, storageIssue, loading,
-  } = useWorkspaceProject();
+  } = quick ? quickRun : projects;
   const [modeRequest, setModeRequest] = useState(null);
   const [location, setLocation] = useState(null);
   const [inspectorMode, setInspectorMode] = useState('file');
@@ -43,12 +50,15 @@ export function Workspace({ hidden, layout, onResize, showPanel, theme, toolbar,
   const [editorFocusRequest, setEditorFocusRequest] = useState(0);
   const [feedback, setFeedback] = useState(null);
   const [lineCount, setLineCount] = useState(0);
-  const [serviceStatus, setServiceStatus] = useState('Checking services…');
+  const [services, setServices] = useState(null);
+  const [serviceAttempt, setServiceAttempt] = useState(0);
   const [preferences, setPreferences] = useState(readEditorPreferences);
   const [extent, setExtent] = useState({ width: 1200, height: 800 });
-  const files = useMemo(() => project.entries.filter(({ kind }) => kind === 'file'), [project.entries]);
+  const files = useMemo(() => project.entries.filter(({ kind }) => kind === 'file')
+    .map((file) => ({ ...file, content: readContent(file) })), [project.entries, readContent]);
   const activeFile = files.find((file) => file.id === project.activeId);
-  const target = executionTarget(files.find((file) => file.id === project.targetId));
+  const entry = quick ? activeFile : projectEntry(project);
+  const target = executionTarget(entry);
   const execution = useExecution();
   const analysis = useAnalysis();
   const snapshot = analysis.state?.snapshot;
@@ -57,7 +67,9 @@ export function Workspace({ hidden, layout, onResize, showPanel, theme, toolbar,
   const locateAnalysisRange = useMemo(() => snapshot && sourceRanges(snapshot.content), [snapshot]);
   const report = analysis.state?.report;
   const analysisLanguage = activeFile && fileMode(activeFile.path);
-  const canAnalyze = !restrictedDeployment && !loading && ['c', 'python'].includes(analysisLanguage)
+  const supportsAnalysis = ['c', 'python'].includes(analysisLanguage);
+  const canRun = !restrictedDeployment && services?.execution === true;
+  const canAnalyze = !restrictedDeployment && services?.analysis === true && !loading && supportsAnalysis
     && analysis.state?.status !== 'running';
   const rawIssues = useMemo(() => readBuildIssues(execution.run.log, buildSources), [execution.run.log, buildSources]);
   const issues = useMemo(
@@ -77,7 +89,50 @@ export function Workspace({ hidden, layout, onResize, showPanel, theme, toolbar,
   }, [issues, markersByFile, report, staleAnalysis, snapshot, locateAnalysisRange]);
 
   function selectFile(id) {
-    updateProject((state) => openFile(state, id));
+    updateProject((state) => quick ? (state.activeId === id ? state : { ...state, activeId: id }) : openFile(state, id));
+  }
+
+  function switchWorkspace() {
+    if (execution.active) return;
+    saveNow();
+    uploadGeneration.current++;
+    setLocation(null);
+    setModeRequest(null);
+    setDialog(null);
+    setQuickOpen(false);
+    setReveal(null);
+    setFeedback(null);
+    setBuildSources(new Map());
+    setInspectorMode('file');
+    setQuickInspector(false);
+    execution.reset();
+    analysis.reset();
+    setQuick(!quick);
+  }
+
+  function switchLanguage(language) {
+    if (execution.active) return;
+    const file = files.find(({ path }) => fileMode(path) === language);
+    if (!file || file.id === project.activeId) return;
+    analysis.reset();
+    setLocation(null);
+    if (inspectorMode === 'analysis') setQuickInspector(false);
+    selectFile(file.id);
+  }
+
+  function showInspector(mode) {
+    if (quick) setQuickInspector(true);
+    else showPanel('inspector');
+    setInspectorMode(mode);
+  }
+
+  function currentSource(file) {
+    return editor.current?.readSource(file.id) ?? readContent(file);
+  }
+
+  function insertExample() {
+    editor.current?.replaceSource(templateContent(activeFile.path, analysisLanguage));
+    setExampleOpen(false);
   }
 
   function revealFolder(path) {
@@ -103,18 +158,20 @@ export function Workspace({ hidden, layout, onResize, showPanel, theme, toolbar,
 
   function analyzeActiveFile() {
     if (!canAnalyze) return;
-    showPanel('inspector');
-    setInspectorMode('analysis');
-    void analysis.start(activeFile, readContent(activeFile), analysisLanguage);
+    showInspector('analysis');
+    void analysis.start(activeFile, currentSource(activeFile), analysisLanguage);
   }
 
   function runTarget(testCase = null) {
-    if (restrictedDeployment || !target || execution.active) return;
-    showPanel('debug');
-    const { entries, targetId } = currentProject.current;
+    if (!canRun || loading || !target || execution.active) return;
+    if (quick) setQuickDebug(true);
+    else showPanel('debug');
+    const state = currentProject.current;
+    const entry = quick ? state.entries.find(({ id }) => id === state.activeId) : projectEntry(state);
+    const entries = quick ? [entry] : state.entries;
     let payload;
     try {
-      payload = makeExecutionPayload(entries, targetId, readContent);
+      payload = makeExecutionPayload(entries, entry.id, currentSource);
     } catch (error) {
       setBuildSources(new Map());
       execution.reject(target, error.message);
@@ -130,13 +187,13 @@ export function Workspace({ hidden, layout, onResize, showPanel, theme, toolbar,
     if (!(event.ctrlKey || event.metaKey) || event.altKey || event.isComposing || event.repeat
       || document.querySelector('dialog[open]')) return;
     const key = event.key.toLowerCase();
-    if (key === 'f' && event.shiftKey) {
+    if (!quick && key === 'f' && event.shiftKey) {
       event.preventDefault();
       showNavigatorMode('search');
     } else if (key === 's' && !event.shiftKey) {
       event.preventDefault();
       saveNow();
-    } else if (key === 'p' && !event.shiftKey) {
+    } else if (!quick && key === 'p' && !event.shiftKey) {
       event.preventDefault();
       setQuickOpen(true);
     } else if (key === 'enter') {
@@ -221,12 +278,13 @@ export function Workspace({ hidden, layout, onResize, showPanel, theme, toolbar,
       const folder = ownFolder ? joinPath(parent, name.slice(0, name.lastIndexOf('.'))) : parent;
       const path = joinPath(folder, name);
       const additions = ownFolder ? [{ kind: 'folder', path: folder }] : [];
+      const sumTemplate = template.endsWith('-sum');
       additions.push(type === 'new-file'
-        ? { kind: 'file', path, content: templateContent(path, template) }
+        ? { kind: 'file', path, content: templateContent(path, template), ...(sumTemplate && { sumTemplate }) }
         : { kind: 'folder', path });
       updateProject((state) => {
         const next = addEntries(state, additions);
-        return template.endsWith('-sum') ? { ...next, targetId: next.activeId } : next;
+        return sumTemplate ? { ...next, targetId: next.activeId } : next;
       });
       if (folder) setReveal({ path: folder });
     }
@@ -234,7 +292,6 @@ export function Workspace({ hidden, layout, onResize, showPanel, theme, toolbar,
 
   useEffect(() => { saveEditorPreferences(preferences); }, [preferences]);
   useEffect(() => {
-    if (!restrictedDeployment) return undefined;
     const controller = new AbortController();
     const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(5000)]);
     fetch(backendUrl('/api/v1/capabilities/'), { signal, cache: 'no-store' })
@@ -242,15 +299,16 @@ export function Workspace({ hidden, layout, onResize, showPanel, theme, toolbar,
         if (!response.ok) throw new Error('Capabilities unavailable');
         return response.json();
       })
-      .then((data) => {
-        if (data?.execution?.available !== false || data?.analysis?.available !== false) {
+      .then(({ execution, analysis }) => {
+        if (typeof execution?.available !== 'boolean' || typeof analysis?.available !== 'boolean'
+          || (restrictedDeployment && (execution.available || analysis.available))) {
           throw new Error('Unexpected deployment capabilities');
         }
-        if (!controller.signal.aborted) setServiceStatus('Restricted demo');
+        if (!controller.signal.aborted) setServices({ execution: execution.available, analysis: analysis.available });
       })
-      .catch(() => { if (!controller.signal.aborted) setServiceStatus('Service unavailable'); });
+      .catch(() => { if (!controller.signal.aborted) setServices({ offline: true }); });
     return () => controller.abort();
-  }, []);
+  }, [serviceAttempt]);
   useLayoutEffect(() => {
     if (hidden || loading) return undefined;
     const listener = (event) => handleShortcut(event);
@@ -267,18 +325,24 @@ export function Workspace({ hidden, layout, onResize, showPanel, theme, toolbar,
     return () => observer.disconnect();
   }, [hidden, loading]);
 
+  const visibleLayout = quick ? {
+    ...layout,
+    navigator: { ...layout.navigator, visible: false },
+    inspector: { ...layout.inspector, visible: quickInspector },
+    debug: { ...layout.debug, visible: quickDebug },
+  } : layout;
   const dimensions = Object.fromEntries(Object.entries(panelOptions).map(([panel, options]) => {
     const available = panel === 'debug' ? extent.height * 0.55 : extent.width * 0.31;
     const bounds = { ...options, max: Math.max(options.min, Math.min(options.max, Math.floor(available))) };
     return [panel, { ...bounds, size: clampSize(layout[panel].size, bounds) }];
   }));
-  const tracks = Object.fromEntries(Object.keys(layout).flatMap((panel) => [
-    ['--' + panel + '-size', layout[panel].visible ? dimensions[panel].size + 'px' : '0px'],
-    ['--' + panel + '-handle', layout[panel].visible ? '0.5rem' : '0px'],
+  const tracks = Object.fromEntries(Object.keys(visibleLayout).flatMap((panel) => [
+    ['--' + panel + '-size', visibleLayout[panel].visible ? dimensions[panel].size + 'px' : '0px'],
+    ['--' + panel + '-handle', visibleLayout[panel].visible ? '0.5rem' : '0px'],
   ]));
 
   function splitter(panel) {
-    return layout[panel].visible && (
+    return visibleLayout[panel].visible && (
       <Splitter panel={panel} {...dimensions[panel]} onResize={(size) => onResize(panel, size)} />
     );
   }
@@ -286,11 +350,27 @@ export function Workspace({ hidden, layout, onResize, showPanel, theme, toolbar,
   return (
     <>
       <WorkspaceToolbar
-        {...toolbar} theme={theme} layout={layout} showPreview={hidden}
+        {...toolbar} theme={theme} layout={visibleLayout} showPreview={hidden} quick={quick}
+        togglePanel={(panel) => quick && panel === 'debug' ? setQuickDebug(!quickDebug) : toolbar.togglePanel(panel)}
+        resetLayout={() => {
+          if (quick) { setQuickDebug(true); setQuickInspector(false); }
+          toolbar.resetLayout();
+        }}
+        switchWorkspace={switchWorkspace} language={analysisLanguage} switchLanguage={switchLanguage}
+        showExample={() => currentSource(activeFile).length ? setExampleOpen(true) : insertExample()}
+        openPreferences={() => showInspector('file')} supportsAnalysis={supportsAnalysis} loading={loading}
         target={loading ? null : target} execution={execution} runTarget={() => runTarget()}
         canAnalyze={Boolean(canAnalyze)} analyzeActiveFile={analyzeActiveFile} analysisStatus={analysis.state?.status}
-        serviceStatus={restrictedDeployment ? serviceStatus : null}
+        canRun={canRun} restricted={restrictedDeployment}
+        serviceStatus={!services ? 'Checking services…' : services.offline ? 'Service unavailable'
+          : restrictedDeployment ? 'Restricted demo' : !services.execution ? 'Execution disabled' : null}
+        retryServices={services && !restrictedDeployment && (!services.execution || !services.analysis)
+          ? () => { setServices(null); setServiceAttempt(serviceAttempt + 1); } : null}
       />
+      {services?.offline && !hidden && !restrictedDeployment &&
+        <p className="workspace-save-alert" role="alert">Start the local ARCLIS backend, then use View → Retry services.</p>}
+      {services && !services.offline && !services.execution && !hidden && !restrictedDeployment &&
+        <p className="workspace-save-alert" role="alert">Enable local execution on the loopback backend, then use View → Retry services.</p>}
       {storageIssue && !hidden && <p className="workspace-save-alert" role="alert">{storageIssue}</p>}
       {loading ? (
         <main className="workspace-loading" aria-label="Workspace" aria-busy="true" hidden={hidden}>
@@ -298,16 +378,16 @@ export function Workspace({ hidden, layout, onResize, showPanel, theme, toolbar,
         </main>
       ) : (
         <main className="workspace-layout" aria-label="Workspace" ref={viewport} hidden={hidden} style={tracks}>
-          <ProjectNavigator
+          {!quick && <ProjectNavigator
             project={project} activeFile={activeFile} openFile={selectFile} visible={layout.navigator.visible}
-            goToSymbol={(symbol) => editor.current?.goToSymbol(symbol)} choose={choose} reveal={reveal} feedback={feedback}
+            choose={choose} reveal={reveal} feedback={feedback}
             files={files} readContent={readContent} contentVersion={contentVersion} issues={issues}
             goToLocation={goToLocation} modeRequest={modeRequest}
-          />
+          />}
           {splitter('navigator')}
           <div className="workspace-center">
             <SourceEditor
-              ref={editor} files={files} activeFile={activeFile} tabs={project.tabs} modified={modified}
+              ref={editor} files={files} activeFile={activeFile} tabs={project.tabs} modified={modified} quick={quick}
               openFile={selectFile} closeTab={(id) => updateProject((state) => closeTab(state, id))}
               revealFolder={revealFolder} theme={theme} hidden={hidden} preferences={preferences}
               markersByFile={markers} onLineCount={setLineCount} onFileEdited={markFile} location={location}
@@ -315,18 +395,22 @@ export function Workspace({ hidden, layout, onResize, showPanel, theme, toolbar,
               focusRequest={editorFocusRequest}
             />
             {splitter('debug')}
-            <DebugPanel visible={layout.debug.visible} execution={execution} theme={theme} workspaceHidden={hidden}
-              target={target} runCase={restrictedDeployment ? null : runTarget} />
+            <DebugPanel visible={visibleLayout.debug.visible} execution={execution} theme={theme} workspaceHidden={hidden}
+              target={target} runCase={quick || !canRun || !entry?.sumTemplate ? null : runTarget}
+              issues={quick ? issues : []} goToLocation={goToLocation} />
           </div>
           {splitter('inspector')}
           <WorkspaceInspector
-            file={activeFile} lineCount={lineCount} readContent={readContent} files={files} targetId={project.targetId}
+            file={activeFile} lineCount={lineCount} readContent={readContent}
+            files={quick ? [] : files} targetId={project.targetId}
             selectTarget={(targetId) => updateProject((state) => ({ ...state, targetId }))}
-            preferences={preferences} visible={layout.inspector.visible}
+            preferences={preferences} visible={visibleLayout.inspector.visible}
             setPreference={(key, value) => setPreferences((previous) => ({ ...previous, [key]: value }))}
             resetPreferences={() => setPreferences(editorDefaults)}
-            target={target} execution={execution} issueCount={issues.length} showIssues={() => showNavigatorMode('issues')}
+            target={target} execution={execution} issueCount={quick ? 0 : issues.length}
+            showIssues={() => showNavigatorMode('issues')}
             mode={inspectorMode} setMode={setInspectorMode} analysis={analysis.state}
+            closeInspector={quick ? () => setQuickInspector(false) : null}
             staleAnalysis={staleAnalysis} goToAnalysisRange={goToAnalysisRange}
           />
           <input
@@ -346,8 +430,25 @@ export function Workspace({ hidden, layout, onResize, showPanel, theme, toolbar,
               setEditorFocusRequest((request) => request + 1);
             }} />
           )}
+          {exampleOpen && <ExampleDialog close={() => setExampleOpen(false)} insert={insertExample} />}
         </main>
       )}
     </>
+  );
+}
+
+function ExampleDialog({ close, insert }) {
+  const dialog = useRef(null);
+  useEffect(() => { dialog.current.showModal(); }, []);
+  return (
+    <dialog ref={dialog} className="layout-dialog" aria-labelledby="replace-draft-heading"
+      onCancel={(event) => { event.preventDefault(); close(); }}>
+      <h2 id="replace-draft-heading">Replace this draft with an example?</h2>
+      <p>You can undo the replacement in the editor.</p>
+      <div className="layout-dialog-actions">
+        <button type="button" onClick={close} autoFocus>Cancel</button>
+        <button type="button" onClick={insert}>Replace draft</button>
+      </div>
+    </dialog>
   );
 }

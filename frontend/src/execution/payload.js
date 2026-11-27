@@ -7,7 +7,7 @@ const encoder = new TextEncoder();
 export function makeExecutionPayload(entries, targetId, getContent) {
   const selected = entries.find((item) => item.id === targetId);
   const target = executionTarget(selected);
-  if (!target) throw new Error('Select an execution target in the inspector.');
+  if (!target) throw new Error('Choose a runnable project entry file.');
   const { language, entry_file } = target;
   const directory = parentPath(entry_file);
   const files = [];

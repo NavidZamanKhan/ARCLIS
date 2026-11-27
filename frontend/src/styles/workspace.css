@@ -94,6 +94,42 @@
   background: transparent;
 }
 
+.language-select {
+  min-inline-size: 5.25rem;
+  padding-inline: var(--space-2);
+  border: 1px solid var(--border-control);
+  border-radius: var(--control-radius);
+  background: var(--surface-workspace);
+  color: var(--text-primary);
+  font-size: 0.8125rem;
+}
+
+.toolbar-entry {
+  min-inline-size: 0;
+  max-inline-size: 12rem;
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-family: var(--code-font);
+  font-size: 0.75rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.quick-source-name,
+.quick-source-hint {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding-inline: var(--space-3);
+  color: var(--text-secondary);
+  font-size: 0.8125rem;
+}
+
+.quick-source-hint {
+  padding-block: var(--space-1);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
 .execution-status {
   min-inline-size: 8.5rem;
   color: var(--text-secondary);
@@ -1131,14 +1167,17 @@
 }
 
 .terminal-frame {
-  position: relative;
+  display: flex;
   min-height: 1.25rem;
   flex: 1;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .terminal-surface {
-  position: absolute;
-  inset: var(--space-1) var(--space-2);
+  min-height: 0;
+  flex: 1;
+  margin: var(--space-1) var(--space-2);
 }
 
 .terminal-surface .xterm {
@@ -1156,16 +1195,25 @@
 .console-input {
   display: flex;
   flex: none;
-  gap: var(--space-1);
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
   padding: var(--space-1) var(--space-2);
   border-top: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  font-size: 0.8125rem;
 }
 
-.console-input input {
-  min-width: 0;
-  min-height: 1.75rem;
+.console-input span {
   flex: 1;
-  padding-inline: var(--space-2);
+  min-inline-size: min(100%, 14rem);
+}
+
+.terminal-draft {
+  max-block-size: 32%;
+  overflow: auto;
+  margin: 0 var(--space-2) var(--space-1);
+  padding: var(--space-1) var(--space-2);
   border: 1px solid var(--border-control);
   border-radius: var(--control-radius);
   background: var(--surface-workspace);
@@ -1173,6 +1221,10 @@
   font-size: 0.8125rem;
 }
 
+.terminal-draft pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
 .console-notice {
   padding-inline: var(--space-3);
   color: var(--text-secondary);
@@ -1359,6 +1411,11 @@
 }
 
 @media (max-width: 37rem) {
+  .workspace-toolbar {
+    grid-template-areas: "identity" "source" "tools";
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   .workspace-identity {
     gap: var(--space-1) var(--space-2);
   }
@@ -1369,9 +1426,9 @@
   }
 
   .execution-toolbar {
-    display: grid;
-    justify-items: end;
-    gap: 0.125rem;
+    justify-self: stretch;
+    flex-wrap: wrap;
+    gap: var(--space-1);
   }
 
   .execution-status {

@@ -6,6 +6,10 @@ const debug = (page) => page.getByRole('region', { name: 'Debug' });
 
 async function launch(page) {
   await page.goto('/');
+  await page.getByRole('button', { name: 'Projects', exact: true }).click();
+  const reset = await projectAction(page, 'Reset Workspace');
+  await reset.getByRole('radio', { name: 'Restore sample files' }).check();
+  await reset.getByRole('button', { name: 'Reset Workspace' }).click();
   await expect(navigator(page).getByRole('button', { name: 'main.c, C', exact: true })).toBeVisible();
 }
 
@@ -38,15 +42,23 @@ for (const [language, label] of [['c', 'C'], ['cpp', 'C++'], ['java', 'Java'], [
     await expect(verdict).toBeInViewport({ ratio: 1 });
 
     if (language === 'c') {
-      await inspector(page).getByLabel('Execution target').selectOption({ label: 'main.c' });
+      await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+      await page.evaluate(() => navigator.clipboard.writeText(
+        '#include <stdio.h>\nint main(void) { puts("Different output"); return 0; }',
+      ));
+      await page.locator('.source-editor-host .view-line').first().click({ position: { x: 3, y: 8 } });
+      await page.keyboard.press('Control+a');
+      await page.keyboard.press('Control+v');
       await debug(page).getByRole('button', { name: 'Run case', exact: true }).click();
       await expect(verdict).toContainText('Output differs');
-      await expect(verdict).toContainText('Sum: 55');
+      await expect(verdict).toContainText('Different output');
       await debug(page).getByRole('button', { name: 'Console', exact: true }).click();
       await debug(page).getByRole('button', { name: 'Clear console', exact: true }).click();
       await debug(page).getByRole('button', { name: 'Test cases', exact: true }).click();
       await expect(verdict).toContainText('Output differs');
-      await expect(verdict).toContainText('Sum: 55');
+      await expect(verdict).toContainText('Different output');
+      await inspector(page).getByLabel('Execution target').selectOption({ label: 'main.c' });
+      await expect(debug(page).getByRole('button', { name: 'Run case', exact: true })).toBeDisabled();
     }
   });
 }
@@ -108,13 +120,15 @@ test('resets a running workspace to empty and preserves editor settings across r
   await inspector(page).getByRole('button', { name: 'Analysis', exact: true }).click();
   await expect(inspector(page).getByText('Open a C or Python file and select Analyze.')).toBeVisible();
   await page.reload();
+  await page.getByRole('button', { name: 'Projects', exact: true }).click();
   await expect(navigator(page).getByText(/No project files/)).toBeVisible();
   await expect(inspector(page).getByLabel('Font size')).toHaveValue('18');
   await expect(inspector(page).getByLabel('Word wrap')).toBeChecked();
   await expect(inspector(page).getByLabel('Minimap')).toBeChecked();
 
   reset = await projectAction(page, 'Reset Workspace');
-  await expect(reset.getByRole('radio', { name: 'Restore sample files' })).toBeChecked();
+  await expect(reset.getByRole('radio', { name: 'Start empty' })).toBeChecked();
+  await reset.getByRole('radio', { name: 'Restore sample files' }).check();
   await reset.getByRole('button', { name: 'Reset Workspace', exact: true }).click();
   await expect(navigator(page).getByRole('button', { name: 'main.c, C', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Run', exact: true })).toBeEnabled();

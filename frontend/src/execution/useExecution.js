@@ -60,9 +60,11 @@ function update(run, event) {
         build: run.build === 'Compiling' ? 'Interrupted' : run.build,
       };
     case 'error':
-      return { ...run, error: event.message, inputClosed: event.code === 'stdin_rejected' ? false : run.inputClosed };
+      return { ...run, error: event.message };
     case 'input-closed':
       return { ...run, inputClosed: true };
+    case 'input-accepted':
+      return { ...run, frames: [...run.frames, { type: 'input', data: event.data }] };
     case 'diagnostics':
       return { ...run, frames: [...run.frames, event], log: run.log + event.data };
     case 'stdout':
@@ -88,7 +90,7 @@ export function useExecution() {
 
   return {
     run,
-    label: statusLabels[run.state],
+    label: run.result?.code === 'worker_unavailable' ? 'Worker unavailable' : statusLabels[run.state],
     active: activeStates.has(run.state),
     failed: failureStates.has(run.state),
     start: client.start,

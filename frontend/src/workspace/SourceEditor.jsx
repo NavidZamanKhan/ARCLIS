@@ -12,7 +12,7 @@ const actions = [
 
 export function SourceEditor({
   ref, files, activeFile, tabs, modified, openFile, closeTab, revealFolder, theme,
-  preferences, hidden, markersByFile, onLineCount, onFileEdited, location, showQuickOpen, createFile, focusRequest,
+  preferences, hidden, markersByFile, onLineCount, onFileEdited, location, showQuickOpen, createFile, focusRequest, quick,
 }) {
   const host = useRef(null);
   const selectedTab = useRef(null);
@@ -46,16 +46,17 @@ export function SourceEditor({
   }, [tabs, activeFile, hidden]);
 
   useImperativeHandle(ref, () => ({
-    goToSymbol(symbol) {
-      session.current?.goToSymbol(symbol);
-    },
+    readSource: (id) => session.current?.readSource(id),
+    replaceSource: (content) => session.current?.replaceSource(content),
   }), []);
 
   const path = activeFile?.path.split('/') ?? [];
   return (
     <section className="workspace-editor" aria-label="Editor">
       <div className="workspace-bar editor-bar">
-        <div className="editor-tabs" role="group" aria-label="Open files">
+        {quick ? (
+          <div className="quick-source-name"><FileCode size={14} aria-hidden="true" />{activeFile?.path}</div>
+        ) : <div className="editor-tabs" role="group" aria-label="Open files">
           {tabs.map((id) => {
             const file = files.find((entry) => entry.id === id);
             return (
@@ -78,12 +79,12 @@ export function SourceEditor({
               </div>
             );
           })}
-        </div>
+        </div>}
         <div className="editor-actions" role="group" aria-label="Source editor actions">
-          <button type="button" aria-label="Quick Open" title="Quick Open" aria-keyshortcuts="Control+P Meta+P"
+          {!quick && <button type="button" aria-label="Quick Open" title="Quick Open" aria-keyshortcuts="Control+P Meta+P"
             onClick={showQuickOpen}>
             <FolderOpen size={16} aria-hidden="true" />
-          </button>
+          </button>}
           {actions.map(([label, id, Icon]) => (
             <button
               key={id} type="button" aria-label={label} title={label} disabled={!activeFile}
@@ -94,7 +95,7 @@ export function SourceEditor({
           ))}
         </div>
       </div>
-      <nav className="editor-jump-bar" aria-label="Jump bar">
+      {!quick && <nav className="editor-jump-bar" aria-label="Jump bar">
         <div className="editor-breadcrumbs">
           <button type="button" onClick={() => revealFolder('')}>Workspace</button>
           {path.slice(0, -1).map((segment, index) => {
@@ -116,7 +117,8 @@ export function SourceEditor({
           <option value="" disabled>Jump to file</option>
           {files.map((file) => <option key={file.id} value={file.id}>{file.path}</option>)}
         </select>
-      </nav>
+      </nav>}
+      {quick && activeFile?.path === 'Main.java' && <p className="quick-source-hint">Use class Main without a package declaration.</p>}
       <div className="source-editor-frame">
         <div className="source-editor-host" ref={host} hidden={!activeFile} />
         {!activeFile && (

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useEffectEvent, useRef } from 'react';
 import { FitAddon } from '@xterm/addon-fit';
 import { Terminal } from '@xterm/xterm';
 import '@xterm/xterm/css/xterm.css';
@@ -15,10 +15,19 @@ function terminalTheme() {
   };
 }
 
-export default function TerminalSurface({ frames, theme, visible }) {
+export default function TerminalSurface({ frames, theme, visible, inputEnabled, onInput, onKey }) {
   const host = useRef(null);
   const mounted = useRef(null);
   const rendered = useRef([]);
+  const receiveInput = useEffectEvent((data) => {
+    if (inputEnabled) onInput(data);
+  });
+  const handleKey = useEffectEvent((event) => {
+    const key = event.key.toLowerCase();
+    const clipboardShortcut = !event.altKey && (event.ctrlKey || event.metaKey) && ['c', 'v'].includes(key);
+    if (key === 'tab' || clipboardShortcut || (event.shiftKey && key === 'insert')) return false;
+    return !inputEnabled || onKey(event);
+  });
 
   useEffect(() => {
     const element = host.current;
@@ -34,6 +43,9 @@ export default function TerminalSurface({ frames, theme, visible }) {
     const fitAddon = new FitAddon();
     terminal.loadAddon(fitAddon);
     terminal.open(element);
+    terminal.textarea?.setAttribute('aria-label', 'Program input');
+    terminal.attachCustomKeyEventHandler((event) => handleKey(event));
+    const inputListener = terminal.onData((data) => receiveInput(data));
     function fit() {
       if (element.clientWidth > 0 && element.clientHeight > 0) fitAddon.fit();
     }
@@ -42,6 +54,7 @@ export default function TerminalSurface({ frames, theme, visible }) {
     mounted.current = { terminal, fit };
     rendered.current = [];
     return () => {
+      inputListener.dispose();
       observer.disconnect();
       terminal.dispose();
       mounted.current = null;
@@ -50,6 +63,11 @@ export default function TerminalSurface({ frames, theme, visible }) {
 
   useEffect(() => { mounted.current.terminal.options.theme = terminalTheme(); }, [theme]);
   useEffect(() => { if (visible) mounted.current.fit(); }, [visible]);
+  useEffect(() => {
+    const { terminal } = mounted.current;
+    terminal.options.disableStdin = !inputEnabled;
+    if (visible && inputEnabled) terminal.focus();
+  }, [inputEnabled, visible]);
 
   useEffect(() => {
     const terminal = mounted.current.terminal;
@@ -58,7 +76,7 @@ export default function TerminalSurface({ frames, theme, visible }) {
     if (reset) terminal.write('\u001bc');
     for (const { type, data } of frames.slice(reset ? 0 : previous.length)) {
       // Output is already printable. Only these local sequences set stream colors.
-      if (type === 'stdout') terminal.write(data);
+      if (type === 'stdout' || type === 'input') terminal.write(data);
       else terminal.write((type === 'stderr' ? '\u001b[31m' : '\u001b[33m') + data + '\u001b[0m');
     }
     rendered.current = frames;

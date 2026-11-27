@@ -1,3 +1,5 @@
+import { X } from 'lucide-react';
+
 import { AnalysisInspector } from '../analysis/AnalysisInspector.jsx';
 import { fontSizes, tabSizes } from './editorPreferences.js';
 import { basename, executionTarget, extension, fileMode, languages } from './projectFiles.js';
@@ -67,11 +69,16 @@ function BuildDetails({ target, execution, issueCount, showIssues }) {
 export function WorkspaceInspector({
   file, lineCount, readContent, files, targetId, target, selectTarget, preferences, setPreference,
   visible, execution, issueCount, showIssues, resetPreferences,
-  mode, setMode, analysis, staleAnalysis, goToAnalysisRange,
+  mode, setMode, analysis, staleAnalysis, goToAnalysisRange, closeInspector,
 }) {
   return (
     <aside className="workspace-inspector" id="workspace-inspector" aria-label="Inspector" hidden={!visible}>
-      <div className="workspace-bar"><h2>Inspector</h2></div>
+      <div className="workspace-bar navigator-bar">
+        <h2>Inspector</h2>
+        {closeInspector && <button type="button" className="navigator-more" aria-label="Close inspector" onClick={closeInspector}>
+          <X size={15} aria-hidden="true" />
+        </button>}
+      </div>
       <div className="inspector-modes" role="group" aria-label="Inspector view">
         <button type="button" aria-pressed={mode === 'file'} onClick={() => setMode('file')}>File</button>
         <button type="button" aria-pressed={mode === 'build'} onClick={() => setMode('build')}>Build</button>
@@ -86,15 +93,15 @@ export function WorkspaceInspector({
                 <FileDetails file={file} lineCount={lineCount} readContent={readContent} />
               </>
             ) : <BuildDetails target={target} execution={execution} issueCount={issueCount} showIssues={showIssues} />}
-            <div className="editor-preferences target-control">
+            {files.filter(executionTarget).length > 1 && <div className="editor-preferences target-control">
               <label>
                 Execution target
                 <select value={targetId ?? ''} onChange={(event) => selectTarget(Number(event.target.value) || null)}>
-                  <option value="">None selected</option>
+                  <option value="">Choose entry file</option>
                   {files.filter(executionTarget).map((target) => <option key={target.id} value={target.id}>{target.path}</option>)}
                 </select>
               </label>
-            </div>
+            </div>}
           </>
         )}
         {mode === 'file' && (

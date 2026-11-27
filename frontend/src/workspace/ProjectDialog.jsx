@@ -24,7 +24,7 @@ export function ProjectDialog({ action, occupied, submit, close }) {
   const [template, setTemplate] = useState('');
   const [suggestedName, setSuggestedName] = useState('');
   const [ownFolder, setOwnFolder] = useState(true);
-  const [resetMode, setResetMode] = useState('samples');
+  const [resetMode, setResetMode] = useState('empty');
   const [error, setError] = useState('');
   const destructive = action.type === 'delete' || action.type === 'reset';
   const title = labels[action.type];

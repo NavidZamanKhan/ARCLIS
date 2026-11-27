@@ -2,13 +2,14 @@ import { restoreProject } from './projectFiles.js';
 
 const databaseName = 'arclis';
 const storeName = 'workspace';
-const recordKey = 'current';
-const draftKey = 'arclis.workspace-draft';
 const version = 1;
+export const projectStorage = {
+  recordKey: 'current', draftKey: 'arclis.workspace-draft', restore: restoreProject,
+};
 export const saveUnavailable = 'Workspace saving is unavailable. Changes are held in this tab.';
-export const saveConflict = 'Another tab saved this workspace. Download your changes before reloading.';
+export const saveConflict = 'Another tab saved this workspace. Copy your source before reloading.';
 
-export function openWorkspaceStorage() {
+export function openWorkspaceStorage(recordKey = projectStorage.recordKey) {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(databaseName, version);
     let blocked = false;
@@ -55,23 +56,23 @@ export function openWorkspaceStorage() {
   });
 }
 
-export function readWorkspaceDraft() {
+export function readWorkspaceDraft({ draftKey, restore } = projectStorage) {
   try {
     const draft = JSON.parse(sessionStorage.getItem(draftKey));
     if (draft?.version !== version) return null;
-    return { ...draft, project: restoreProject(draft.project) };
+    return { ...draft, project: restore(draft.project) };
   } catch {
     return null;
   }
 }
 
-export function decodeWorkspaceRecord(record) {
+export function decodeWorkspaceRecord(record, restore = restoreProject) {
   if (!record) return { project: null, revision: null };
   if (record.version !== version || typeof record.revision !== 'string') throw new Error('Invalid workspace record.');
-  return { project: restoreProject(record.project), revision: record.revision };
+  return { project: restore(record.project), revision: record.revision };
 }
 
-export function createWorkspaceSaver(storage, baseRevision, snapshot, onIssue, conflict = false) {
+export function createWorkspaceSaver(storage, baseRevision, snapshot, onIssue, conflict = false, draftKey = projectStorage.draftKey) {
   let revision = baseRevision;
   let timer;
   let dirty = false;

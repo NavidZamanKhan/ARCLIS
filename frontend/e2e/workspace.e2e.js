@@ -11,6 +11,12 @@ const navigator = (page) => page.getByRole('complementary', { name: 'Navigator' 
 
 async function launch(page) {
   await page.goto('/');
+  await page.getByRole('button', { name: 'Projects', exact: true }).click();
+  await navigator(page).getByRole('button', { name: 'Project actions' }).click();
+  await page.getByRole('menuitem', { name: 'Reset Workspace', exact: true }).click();
+  const reset = page.getByRole('dialog', { name: 'Reset Workspace' });
+  await reset.getByRole('radio', { name: 'Restore sample files' }).check();
+  await reset.getByRole('button', { name: 'Reset Workspace' }).click();
   await expect(navigator(page).getByRole('button', { name: 'main.c, C', exact: true })).toBeVisible();
 }
 
@@ -51,10 +57,9 @@ async function consoleContains(page, text) {
 }
 
 async function sendLine(page, line) {
-  const input = debug(page).getByRole('textbox', { name: 'Program input' });
-  await expect(input).toBeEnabled();
-  await input.fill(line);
-  await input.press('Enter');
+  await debug(page).locator('.xterm-screen').click({ position: { x: 6, y: 8 } });
+  await page.keyboard.type(line);
+  await page.keyboard.press('Enter');
 }
 
 async function analyze(page, language) {
@@ -97,6 +102,7 @@ test('persists live edits, open tabs, execution target, theme and layout across 
   await page.getByRole('button', { name: 'Debug panel', exact: true }).click();
   await page.keyboard.press('Control+s');
   await page.reload();
+  await page.getByRole('button', { name: 'Projects', exact: true }).click();
 
   await expect(navigator(page).getByRole('button', { name: 'exercise/State.c, C' })).toHaveAttribute('aria-current', 'true');
   const tabs = page.getByRole('group', { name: 'Open files' });

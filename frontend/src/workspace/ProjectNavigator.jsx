@@ -1,22 +1,22 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
-  Braces, ChevronDown, ChevronRight, CircleAlert, Ellipsis, FileCode, Folder, FolderOpen, Plus, Search,
+  ChevronDown, ChevronRight, CircleAlert, Ellipsis, FileCode, Folder, FolderOpen, Plus, Search,
 } from 'lucide-react';
 
 import { IssueList, WorkspaceSearch } from './SourceLocations.jsx';
 import { basename, executionTarget, fileMode, languages, parentPath } from './projectFiles.js';
 
 const modes = [
-  ['files', 'Files', FolderOpen], ['symbols', 'Symbols', Braces],
+  ['files', 'Files', FolderOpen],
   ['search', 'Search', Search], ['issues', 'Issues', CircleAlert],
 ];
 
-function FileMenu({ menu, close, choose }) {
+function FileMenu({ menu, close, choose, multipleEntries }) {
   const ref = useRef(null);
   const isFolder = menu.item?.kind === 'folder' || !menu.item;
   const actions = [
     ...(isFolder ? [['new-file', 'New File'], ['new-folder', 'New Folder'], ['upload', 'Upload Files']] : [['download', 'Download']]),
-    ...(executionTarget(menu.item) ? [['set-target', 'Set as Execution Target']] : []),
+    ...(multipleEntries && executionTarget(menu.item) ? [['set-target', 'Set as Execution Target']] : []),
     ...(menu.item ? [['copy-path', 'Copy Path'], ['rename', 'Rename'], ['delete', 'Delete']] : []),
     ...(!menu.item ? [['reset', 'Reset Workspace']] : []),
   ];
@@ -77,7 +77,7 @@ function FileMenu({ menu, close, choose }) {
 }
 
 export function ProjectNavigator({
-  project, activeFile, visible, openFile, goToSymbol, choose, reveal, feedback,
+  project, activeFile, visible, openFile, choose, reveal, feedback,
   files, readContent, contentVersion, issues, goToLocation, modeRequest,
 }) {
   const rootButton = useRef(null);
@@ -214,29 +214,14 @@ export function ProjectNavigator({
           {tree('') ?? <p className="navigator-empty">No project files. Use Project actions to add a file or folder.</p>}
         </>
       )}
-      {view === 'symbols' && (
-        <>
-          <h3 className="navigator-caption">Sample declarations</h3>
-          {activeFile?.symbols?.length ? (
-            <ul className="navigator-list">
-              {activeFile.symbols.map((symbol) => (
-                <li key={symbol}>
-                  <button type="button" className="navigator-file font-mono" onClick={() => goToSymbol(symbol)}>
-                    <Braces size={15} aria-hidden="true" />{symbol}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          ) : <p className="navigator-empty">No sample declarations.</p>}
-        </>
-      )}
       {view === 'search' && (
         <WorkspaceSearch files={files} content={readContent} contentVersion={contentVersion}
           goToLocation={goToLocation} focusRequest={modeRequest} />
       )}
       {view === 'issues' && <IssueList issues={issues} goToLocation={goToLocation} />}
       {feedback && <p className="navigator-empty" role={feedback.error ? 'alert' : 'status'}>{feedback.message}</p>}
-      {visible && menu && <FileMenu menu={menu} close={closeMenu} choose={choose} />}
+      {visible && menu && <FileMenu menu={menu} close={closeMenu} choose={choose}
+        multipleEntries={files.filter(executionTarget).length > 1} />}
     </aside>
   );
 }

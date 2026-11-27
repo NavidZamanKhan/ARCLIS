@@ -56,16 +56,20 @@ it('opens a loopback session, streams printable output and uses the token only a
   socket.message({ type: 'status', state: 'RUNNING' });
   socket.message({ type: 'stdout', data: '\u001b[31mPrompt: ' });
   socket.message({ type: 'stderr', data: 'error\n' });
-  expect(client.input('hello π')).toBe('');
-  expect(client.input('é'.repeat(2048))).toContain('4096');
-  expect(client.endInput()).toBe('');
-  expect(client.input('late')).toBe('Standard input is unavailable.');
+  const input = client.input('hello π');
+  socket.message({ type: 'input_ack', request_id: 1 });
+  await expect(input).resolves.toBe('');
+  await expect(client.input('é'.repeat(2048))).resolves.toContain('4096');
+  const eof = client.endInput();
+  socket.message({ type: 'input_ack', request_id: 2 });
+  await expect(eof).resolves.toBe('');
+  await expect(client.input('late')).resolves.toBe('Standard input is unavailable.');
   expect(socket.send.mock.calls.map(([sent]) => JSON.parse(sent))).toEqual([
-    { type: 'stdin', data: 'hello π\n' }, { type: 'eof' },
+    { type: 'stdin', data: 'hello π\n', request_id: 1 }, { type: 'eof', request_id: 2 },
   ]);
   socket.message({ type: 'result', state: 'COMPLETED', exit_code: 0, execution_time_ms: 42 });
   expect(events.map(({ type }) => type)).toEqual([
-    'start', 'status', 'diagnostics', 'status', 'stdout', 'stderr', 'input-closed', 'result',
+    'start', 'status', 'diagnostics', 'status', 'stdout', 'stderr', 'input-accepted', 'input-closed', 'result',
   ]);
   expect(events[2].data).toBe('warn\n');
   expect(events[4].data).toBe('␛[31mPrompt: ');
@@ -98,9 +102,41 @@ it('sends case input in the session request and closes stdin once runtime starts
   expect(harness.socket.send).not.toHaveBeenCalled();
   harness.socket.message({ type: 'status', state: 'RUNNING' });
   harness.socket.message({ type: 'status', state: 'RUNNING' });
-  expect(harness.socket.send.mock.calls).toEqual([['{"type":"eof"}']]);
-  expect(harness.client.input('late')).toBe('Standard input is unavailable.');
+  expect(harness.socket.send.mock.calls).toEqual([['{"type":"eof","request_id":1}']]);
+  harness.socket.message({ type: 'input_ack', request_id: 1 });
+  await expect(harness.client.input('late')).resolves.toBe('Standard input is unavailable.');
   harness.client.dispose();
+});
+
+it('keeps a line pending through unrelated replies and resolves a correlated rejection', async () => {
+  const harness = setup();
+  await harness.client.start(payload);
+  harness.socket.open();
+  harness.socket.message({ type: 'status', state: 'RUNNING' });
+  const input = harness.client.input('retry this');
+  harness.socket.message({ type: 'input_ack', request_id: 2 });
+  await expect(harness.client.input('another line')).resolves.toContain('Waiting');
+  expect(harness.events.some(({ type }) => type === 'input-accepted')).toBe(false);
+  harness.socket.message({ type: 'error', code: 'stdin_rejected', request_id: 1, message: 'Please retry.' });
+  await expect(input).resolves.toBe('Please retry.');
+  const retry = harness.client.input('retry this');
+  harness.socket.message({ type: 'input_ack', request_id: 2 });
+  await expect(retry).resolves.toBe('');
+  expect(harness.events.at(-1)).toEqual({ type: 'input-accepted', data: 'retry this\n' });
+  harness.client.dispose();
+});
+
+it('closes the session on a missing acknowledgement and reports unconfirmed delivery', async () => {
+  vi.useFakeTimers();
+  const harness = setup();
+  await harness.client.start(payload);
+  harness.socket.open();
+  harness.socket.message({ type: 'status', state: 'RUNNING' });
+  const input = harness.client.input('unconfirmed');
+  await vi.advanceTimersByTimeAsync(5000);
+  await expect(input).resolves.toContain('before input acceptance was confirmed');
+  expect(harness.events.at(-1).message).toContain('did not confirm input acceptance');
+  expect(harness.socket.readyState).toBe(3);
 });
 
 it('aborts a pending request on Stop and ignores its late response', async () => {

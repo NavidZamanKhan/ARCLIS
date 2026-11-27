@@ -2,11 +2,13 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { createProject } from './projectFiles.js';
 import {
-  createWorkspaceSaver, decodeWorkspaceRecord, openWorkspaceStorage, readWorkspaceDraft, saveConflict, saveUnavailable,
+  createWorkspaceSaver, decodeWorkspaceRecord, openWorkspaceStorage, projectStorage, readWorkspaceDraft, saveConflict, saveUnavailable,
 } from './workspaceStorage.js';
 
-export function useWorkspaceProject() {
-  const [project, setProject] = useState(createProject);
+const emptyProject = () => createProject(1, { empty: true });
+
+export function useWorkspaceProject(storageProfile = projectStorage, createInitial = emptyProject) {
+  const [project, setProject] = useState(createInitial);
   const currentProject = useRef(project);
   const buffers = useRef(new Map());
   const saver = useRef(null);
@@ -28,11 +30,11 @@ export function useWorkspaceProject() {
     let storage;
 
     async function load() {
-      const draft = readWorkspaceDraft();
+      const draft = readWorkspaceDraft(storageProfile);
       try {
-        storage = await openWorkspaceStorage();
+        storage = await openWorkspaceStorage(storageProfile.recordKey);
         if (disposed) { storage.close(); return; }
-        const saved = decodeWorkspaceRecord(await storage.read());
+        const saved = decodeWorkspaceRecord(await storage.read(), storageProfile.restore);
         if (disposed) return;
         const changedElsewhere = draft && draft.revision !== saved.revision && draft.inFlight !== saved.revision;
         const alreadySaved = changedElsewhere && JSON.stringify(draft.project) === JSON.stringify(saved.project);
@@ -46,7 +48,7 @@ export function useWorkspaceProject() {
         if (conflict) setStorageIssue(saveConflict);
         saver.current = createWorkspaceSaver(storage, saved.revision, snapshot, (message) => {
           if (!disposed) setStorageIssue(message);
-        }, conflict);
+        }, conflict, storageProfile.draftKey);
         if (recovery) saver.current.schedule();
       } catch {
         storage?.close();
@@ -77,7 +79,7 @@ export function useWorkspaceProject() {
       else storage?.close();
       saver.current = null;
     };
-  }, [snapshot]);
+  }, [snapshot, storageProfile]);
 
   const markFile = useCallback((id, dirty, content) => {
     buffers.current.set(id, content);

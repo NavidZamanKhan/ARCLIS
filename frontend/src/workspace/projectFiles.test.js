@@ -35,6 +35,15 @@ describe('project file operations', () => {
     });
   });
 
+  it('retains the two-number cases for an exercise saved by an earlier version', () => {
+    const path = 'pkg/Runner.java';
+    const content = templateContent(path, 'java-sum');
+    const project = addEntries(createProject(), [folder('pkg'), file(path, content)]);
+    const restored = restoreProject(project);
+    expect(restored.entries.at(-1)).toMatchObject({ path, content, sumTemplate: true });
+    expect(restored.entries[0].sumTemplate).toBeUndefined();
+  });
+
   it('validates paths and rejects collisions, missing parents, and oversized file lists atomically', () => {
     const project = createProject();
     for (const path of ['/main.c', '../bad.py', 'a\\b.c', 'bad./x.c', 'bad.txt', 'absent/x.c', 'foo\n.c']) {
