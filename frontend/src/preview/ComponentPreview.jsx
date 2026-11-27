@@ -14,6 +14,8 @@ const statuses = [
 ];
 const palette = [
   { label: 'Workspace', token: '--surface-workspace' },
+  { label: 'Raised surface', token: '--surface-raised' },
+  { label: 'Glass tint', token: '--glass-tint' },
   { label: 'Console', token: '--surface-console' },
   { label: 'Accent', token: '--accent' },
   { label: 'Selection', token: '--surface-selected' },

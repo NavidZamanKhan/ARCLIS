@@ -4,17 +4,19 @@
 }
 
 .workspace-toolbar {
+  position: relative;
   display: flex;
-  z-index: 1;
+  z-index: 4;
   min-height: 3.75rem;
   flex: none;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-3);
-  padding: var(--space-2) var(--space-4);
+  padding: 0.625rem var(--space-4);
   border-bottom: 1px solid var(--border-subtle);
   background: var(--surface-toolbar);
+  box-shadow: inset 0 1px var(--surface-highlight), 0 4px 12px rgb(0 0 0 / 9%);
 }
 
 .workspace-toolbar-actions {
@@ -41,16 +43,23 @@
 
 .toolbar-panels {
   display: flex;
-  gap: var(--space-1);
+  gap: 0.1875rem;
+  padding: 0.1875rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--surface-radius);
+  background: var(--surface-inset);
 }
 
 .toolbar-panels .ui-button {
   min-width: var(--control-height);
   padding-inline: var(--space-2);
+  border-color: transparent;
+  background: transparent;
 }
 
 .toolbar-panels .ui-button[aria-pressed="true"] {
-  background: var(--surface-selection-inactive);
+  border-color: var(--border-subtle);
+  background: var(--surface-raised);
 }
 
 .toolbar-panels .ui-button[aria-pressed="false"] {
@@ -61,31 +70,75 @@
   display: flex;
   flex: 1;
   align-items: center;
-  gap: var(--space-1);
+  gap: var(--space-2);
+  min-width: 0;
 }
 
-.execution-toolbar .ui-button {
+.source-buttons {
+  display: flex;
+  gap: 0.1875rem;
+  padding: 0.1875rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--surface-radius);
+  background: var(--surface-inset);
+}
+
+.source-buttons .ui-button {
+  min-height: 2rem;
   min-width: var(--control-height);
   padding-inline: var(--space-2);
 }
 
-.execution-toolbar button[aria-label="Run"]:enabled {
-  color: var(--accent);
+.source-buttons .ui-button--secondary:not(:hover) {
+  border-color: transparent;
+  background: transparent;
 }
 
 .execution-status {
-  padding-inline: var(--space-2);
+  min-inline-size: 8.5rem;
   color: var(--text-secondary);
   font-size: 0.8125rem;
+  font-weight: 550;
   white-space: nowrap;
 }
 
+.execution-status-content {
+  display: inline-flex;
+  min-height: 1.5rem;
+  align-items: center;
+  gap: 0.375rem;
+  padding-inline: 0.5rem;
+  border-radius: 0.375rem;
+}
+
+.execution-status-dot {
+  inline-size: 0.375rem;
+  block-size: 0.375rem;
+  margin-inline: 0.25rem;
+  border-radius: 50%;
+  background: currentColor;
+}
+
 .execution-status[data-state="active"] {
-  color: var(--accent);
+  --status-tint: var(--signal-information);
 }
 
 .execution-status[data-state="failed"] {
-  color: var(--signal-error);
+  --status-tint: var(--signal-error);
+}
+
+.execution-status[data-state="success"] {
+  --status-tint: var(--signal-success);
+}
+
+.execution-status:not([data-state="idle"]) .execution-status-content {
+  background: color-mix(in srgb, var(--status-tint) 10%, transparent);
+  color: var(--text-primary);
+  animation: arclis-status-in var(--motion-enter) var(--motion-ease) both;
+}
+
+.execution-status-content :is(svg, .execution-status-dot) {
+  color: var(--status-tint, var(--text-secondary));
 }
 
 .layout-menu {
@@ -101,9 +154,9 @@
   min-width: 10.5rem;
   gap: var(--space-1);
   padding: var(--space-1);
-  border: 1px solid var(--border-control);
+  border: 1px solid var(--border-subtle);
   border-radius: var(--surface-radius);
-  background: var(--surface-inspector);
+  background: var(--surface-raised);
 }
 
 .layout-options button {
@@ -129,16 +182,25 @@
   inset: 0;
   width: min(26rem, calc(100vw - var(--space-8)));
   max-width: none;
+  max-height: calc(100dvh - var(--space-6));
   margin: auto;
   padding: var(--space-6);
-  border: 1px solid var(--border-control);
+  border: 1px solid var(--border-subtle);
   border-radius: var(--surface-radius);
-  background: var(--surface-inspector);
+  background: var(--surface-raised);
   color: var(--text-primary);
 }
 
 .layout-dialog::backdrop {
   background: var(--modal-backdrop);
+}
+
+:is(.layout-options, .project-menu, .layout-dialog) {
+  box-shadow: inset 0 1px var(--surface-highlight), var(--surface-shadow);
+}
+
+:is(.layout-options:not([hidden]), .project-menu, .layout-dialog[open]) {
+  animation: arclis-overlay-in var(--motion-enter) var(--motion-ease) both;
 }
 
 .layout-dialog h2 {
@@ -243,6 +305,8 @@
   gap: var(--space-2);
   padding-inline: var(--space-3);
   border-bottom: 1px solid var(--border-subtle);
+  background: var(--surface-tab);
+  box-shadow: inset 0 1px var(--surface-highlight);
   font-size: 0.875rem;
   font-weight: 650;
 }
@@ -251,10 +315,13 @@
   font: inherit;
 }
 
+:is(.workspace-navigator, .workspace-inspector, .workspace-debug):not([hidden]) > .workspace-bar > h2 {
+  animation: arclis-status-in var(--motion-enter) var(--motion-ease) both;
+}
+
 .editor-bar {
   justify-content: space-between;
   padding-inline: 0 var(--space-2);
-  background: var(--surface-tab);
 }
 
 .editor-tabs {
@@ -270,13 +337,20 @@
   flex: none;
   max-width: 15rem;
   align-items: center;
+  border-block-start: 2px solid transparent;
   border-inline-end: 1px solid var(--border-subtle);
   color: var(--text-secondary);
+  transition: background-color var(--motion-feedback), border-color var(--motion-feedback), color var(--motion-feedback);
 }
 
 .editor-tab[data-active="true"] {
+  border-block-start-color: var(--accent);
   background: var(--surface-tab-active);
   color: var(--text-primary);
+}
+
+.editor-tab[data-active="false"]:hover {
+  background: var(--surface-hover);
 }
 
 .editor-tab button {
@@ -328,8 +402,9 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--space-2);
-  padding-inline: var(--space-2);
+  padding-inline: var(--space-3);
   border-bottom: 1px solid var(--border-subtle);
+  background: var(--surface-tab-active);
   color: var(--text-secondary);
   font-size: 0.8125rem;
 }
@@ -706,9 +781,9 @@
   max-height: calc(100dvh - 1rem);
   overflow: auto;
   padding: var(--space-1);
-  border: 1px solid var(--border-control);
-  border-radius: var(--control-radius);
-  background: var(--surface-inspector);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--surface-radius);
+  background: var(--surface-raised);
 }
 
 .project-menu button {
@@ -927,6 +1002,7 @@
   background: var(--surface-workspace);
   touch-action: none;
   user-select: none;
+  transition: background-color var(--motion-feedback);
 }
 
 .workspace-splitter::before {
@@ -937,9 +1013,26 @@
   content: "";
 }
 
+.workspace-splitter::after {
+  position: absolute;
+  inset: 50% auto auto 50%;
+  width: 3px;
+  height: 1.5rem;
+  transform: translate(-50%, -50%);
+  border-radius: 1rem;
+  background: var(--accent);
+  opacity: 0;
+  content: "";
+  transition: opacity var(--motion-feedback);
+}
+
 .workspace-splitter:hover,
 .workspace-splitter:focus-visible {
   background: var(--surface-selection-inactive);
+}
+
+.workspace-splitter:is(:hover, :focus-visible)::after {
+  opacity: 1;
 }
 
 .workspace-splitter:focus-visible {
@@ -969,10 +1062,14 @@
   height: 1px;
 }
 
+.splitter-debug::after {
+  width: 1.5rem;
+  height: 3px;
+}
+
 .debug-bar {
   flex-wrap: wrap;
   justify-content: space-between;
-  background: var(--surface-tab);
 }
 
 .debug-title,
@@ -1155,7 +1252,75 @@
   color: var(--text-primary);
 }
 
+@keyframes arclis-overlay-in {
+  from { opacity: 0.75; transform: translateY(4px) scale(0.985); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes arclis-status-in {
+  from { transform: translateY(2px); }
+  to { transform: none; }
+}
+
+@supports ((backdrop-filter: blur(14px)) or (-webkit-backdrop-filter: blur(14px))) {
+  :is(.workspace-toolbar, .layout-options, .project-menu, .quick-open) {
+    background: var(--glass-tint);
+    -webkit-backdrop-filter: blur(14px);
+    backdrop-filter: blur(14px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :is(.layout-options:not([hidden]), .project-menu, .layout-dialog[open]),
+  .execution-status:not([data-state="idle"]) .execution-status-content,
+  :is(.workspace-navigator, .workspace-inspector, .workspace-debug):not([hidden]) > .workspace-bar > h2 {
+    animation: none;
+  }
+
+  .editor-tab,
+  .workspace-splitter,
+  .workspace-splitter::after {
+    transition: none;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce), (forced-colors: active) {
+  :is(.workspace-toolbar, .layout-options, .project-menu, .quick-open) {
+    background: var(--surface-raised);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+@media (forced-colors: active) {
+  .editor-tab[data-active="true"] {
+    border-block-start-color: Highlight;
+  }
+
+  .toolbar-panels .ui-button[aria-pressed="true"] {
+    border-color: Highlight;
+  }
+}
+
 @media (max-width: 53rem) {
+  .workspace-toolbar {
+    display: grid;
+    grid-template-areas: "identity source" "tools tools";
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: var(--space-2);
+    padding-inline: var(--space-3);
+  }
+
+  .workspace-identity { grid-area: identity; }
+  .execution-toolbar { grid-area: source; justify-self: end; }
+
+  .workspace-toolbar-actions {
+    grid-area: tools;
+    justify-content: space-between;
+    gap: var(--space-2);
+    min-width: 0;
+  }
+
   .app-frame:has(.workspace-layout:not([hidden])) {
     height: auto;
   }
@@ -1190,5 +1355,80 @@
   .workspace-navigator,
   .workspace-inspector {
     padding-bottom: var(--space-3);
+  }
+}
+
+@media (max-width: 37rem) {
+  .workspace-identity {
+    gap: var(--space-1) var(--space-2);
+  }
+
+  .workspace-name {
+    padding-inline-start: var(--space-2);
+    font-size: 0.8125rem;
+  }
+
+  .execution-toolbar {
+    display: grid;
+    justify-items: end;
+    gap: 0.125rem;
+  }
+
+  .execution-status {
+    min-inline-size: 0;
+  }
+
+  .source-buttons .ui-button,
+  .toolbar-panels .ui-button {
+    min-width: 2rem;
+    min-height: 2rem;
+    gap: var(--space-1);
+    padding-inline: 0.375rem;
+    font-size: 0.8125rem;
+  }
+
+  .workspace-toolbar-actions .theme-option,
+  .layout-menu > .ui-button {
+    gap: var(--space-1);
+    padding-inline: 0.375rem;
+  }
+
+  .workspace-toolbar-actions .theme-option svg {
+    display: none;
+  }
+
+  .debug-bar {
+    display: grid;
+    grid-template-areas: "title actions" "views views";
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: var(--space-1);
+    padding-block: var(--space-1);
+  }
+
+  .debug-title { grid-area: title; }
+  .debug-actions { grid-area: actions; }
+
+  .debug-views {
+    grid-area: views;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: thin;
+  }
+
+  .debug-views button {
+    flex: none;
+    white-space: nowrap;
+  }
+}
+
+@media (max-width: 25rem) {
+  .workspace-identity {
+    display: grid;
+    gap: 0.125rem;
+  }
+
+  .workspace-name {
+    padding-inline-start: 0;
+    border-inline-start: 0;
   }
 }

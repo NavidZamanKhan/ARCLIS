@@ -1,4 +1,4 @@
-import { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
+import { useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import { analysisMarkers, sourceRanges } from '../analysis/sourceRanges.js';
 import { useAnalysis } from '../analysis/useAnalysis.js';
@@ -251,7 +251,7 @@ export function Workspace({ hidden, layout, onResize, showPanel, theme, toolbar,
       .catch(() => { if (!controller.signal.aborted) setServiceStatus('Service unavailable'); });
     return () => controller.abort();
   }, []);
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (hidden || loading) return undefined;
     const listener = (event) => handleShortcut(event);
     window.addEventListener('keydown', listener, true);

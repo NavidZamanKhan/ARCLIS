@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { PanelBottom, PanelLeft, PanelRight, Play, ScanLine, SlidersHorizontal, Square } from 'lucide-react';
+import { Check, CircleAlert, PanelBottom, PanelLeft, PanelRight, Play, ScanLine, SlidersHorizontal, Square } from 'lucide-react';
 
 import { Brand } from '../components/Brand.jsx';
 import { Button } from '../components/controls.jsx';
@@ -7,6 +7,26 @@ import { ThemeSelector } from '../components/ThemeSelector.jsx';
 import { panelOptions } from './panelLayout.js';
 
 const panelIcons = { navigator: PanelLeft, inspector: PanelRight, debug: PanelBottom };
+const statusIcons = { success: Check, failed: CircleAlert };
+
+function ExecutionStatus({ execution, serviceStatus }) {
+  let tone = 'idle';
+  if (!serviceStatus) {
+    if (execution.failed) tone = 'failed';
+    else if (execution.active) tone = 'active';
+    else if (execution.run.state === 'COMPLETED') tone = 'success';
+  }
+  const Icon = statusIcons[tone];
+
+  return (
+    <span className="execution-status" role="status" aria-label="Execution status" data-state={tone}>
+      <span className="execution-status-content" key={serviceStatus ?? execution.run.state}>
+        {Icon ? <Icon size={14} aria-hidden="true" /> : <span className="execution-status-dot" aria-hidden="true" />}
+        {serviceStatus ?? execution.label}
+      </span>
+    </span>
+  );
+}
 
 function LayoutMenu({ showPreview, toggleView, resetLayout }) {
   const [open, setOpen] = useState(false);
@@ -91,24 +111,23 @@ export function WorkspaceToolbar({
         <ViewTitle className="workspace-name">{showPreview ? 'Design system' : 'Workspace'}</ViewTitle>
       </div>
       {(!showPreview || execution.active) && (
-        <div className="execution-toolbar" aria-label="Source actions">
-          <Button icon={Play} aria-label="Run" title={restricted ? 'Execution is disabled in this demo'
-            : target ? 'Run ' + target.entry_file : 'Select an execution target'}
-            aria-keyshortcuts="Control+Enter Meta+Enter"
-            disabled={restricted || showPreview || !target || execution.active} onClick={runTarget} />
-          <Button icon={Square} aria-label="Stop" title="Stop execution"
-            aria-keyshortcuts="Control+Shift+Enter Meta+Shift+Enter"
-            disabled={!execution.active || execution.run.state === 'CANCELLING'} onClick={execution.stop} />
-          {!showPreview && (
-            <Button icon={ScanLine} aria-label="Analyze" title={restricted ? 'Analysis is disabled in this demo'
-              : analysisStatus === 'running' ? 'Analyzing source'
-              : canAnalyze ? 'Analyze the active file' : 'Analysis is available for C and Python files'}
-              disabled={!canAnalyze} onClick={analyzeActiveFile}>Analyze</Button>
-          )}
-          <span
-            className="execution-status" role="status" aria-label="Execution status"
-            data-state={execution.failed ? 'failed' : execution.active ? 'active' : 'idle'}
-          >{serviceStatus ?? execution.label}</span>
+        <div className="execution-toolbar" role="group" aria-label="Source actions">
+          <div className="source-buttons">
+            <Button variant="primary" icon={Play} aria-label="Run" title={restricted ? 'Execution is disabled in this demo'
+              : target ? 'Run ' + target.entry_file : 'Select an execution target'}
+              aria-keyshortcuts="Control+Enter Meta+Enter"
+              disabled={restricted || showPreview || !target || execution.active} onClick={runTarget}>Run</Button>
+            <Button icon={Square} aria-label="Stop" title="Stop execution"
+              aria-keyshortcuts="Control+Shift+Enter Meta+Shift+Enter"
+              disabled={!execution.active || execution.run.state === 'CANCELLING'} onClick={execution.stop} />
+            {!showPreview && (
+              <Button icon={ScanLine} aria-label="Analyze" title={restricted ? 'Analysis is disabled in this demo'
+                : analysisStatus === 'running' ? 'Analyzing source'
+                : canAnalyze ? 'Analyze the active file' : 'Analysis is available for C and Python files'}
+                disabled={!canAnalyze} onClick={analyzeActiveFile}>Analyze</Button>
+            )}
+          </div>
+          <ExecutionStatus execution={execution} serviceStatus={serviceStatus} />
         </div>
       )}
       <div className="workspace-toolbar-actions">

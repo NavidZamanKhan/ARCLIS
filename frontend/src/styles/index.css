@@ -81,8 +81,8 @@
   min-inline-size: 0;
   padding: 0.1875rem;
   border: 1px solid var(--border-subtle);
-  border-radius: calc(var(--control-radius) + 0.125rem);
-  background: var(--surface-console);
+  border-radius: var(--surface-radius);
+  background: var(--surface-inset);
 }
 
 .theme-option {
@@ -96,6 +96,7 @@
   cursor: pointer;
   font-size: 0.875rem;
   font-weight: 550;
+  transition: background-color var(--motion-feedback), color var(--motion-feedback);
 }
 
 .theme-option:hover {
@@ -103,13 +104,13 @@
 }
 
 .theme-selector input:checked + .theme-option {
-  background: var(--surface-selection-inactive);
+  background: var(--surface-raised);
   color: var(--text-primary);
   box-shadow: inset 0 0 0 1px var(--border-control);
 }
 
 .theme-selector input:focus-visible + .theme-option {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }
 
@@ -274,6 +275,12 @@
   font-size: 0.875rem;
   font-weight: 600;
   cursor: pointer;
+  transition: background-color var(--motion-feedback), border-color var(--motion-feedback),
+    color var(--motion-feedback), transform var(--motion-feedback) var(--motion-ease);
+}
+
+.ui-button:active:not(:disabled) {
+  transform: scale(0.97);
 }
 
 .ui-button--primary {
@@ -302,8 +309,19 @@
 
 .ui-button:focus-visible,
 .ui-select select:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ui-button,
+  .theme-option {
+    transition: none;
+  }
+
+  .ui-button:active:not(:disabled) {
+    transform: none;
+  }
 }
 
 .preview-actions {
