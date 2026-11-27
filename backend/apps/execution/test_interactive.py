@@ -13,6 +13,7 @@ from django.urls import reverse
 from config.routing import build_websocket_application
 
 from .interaction import MAX_INPUT_CHUNK, MAX_STDIN_BYTES, InputRejected, Interaction
+from .sandbox import SandboxUnavailable
 from .sessions import SUBPROTOCOL, SessionRegistry
 from .states import ExecutionState
 from .test_sessions import REQUEST
@@ -129,6 +130,24 @@ class SocketTests(SocketFixture, SimpleTestCase):
             self.assertIsNotNone(registry.claim(info["id"], info["owner_token"]))
             registry.finish(info["id"])
 
+    async def test_worker_startup_failure_has_a_safe_actionable_result(self):
+        registry = SessionRegistry()
+        with (
+            patch("apps.execution.api.sessions", registry),
+            patch("apps.execution.consumer.sessions", registry),
+            patch("apps.execution.worker.DockerSandbox") as docker,
+        ):
+            docker.return_value.verify.side_effect = SandboxUnavailable("Internal Docker setup detail")
+            async with self.socket(await self.create(REQUEST)) as socket:
+                self.assertEqual((await socket.receive_output(timeout=3))["type"], "websocket.accept")
+                messages = []
+                await receive_until(socket, messages, lambda: any(packet["type"] == "result" for packet in messages))
+                self.assertEqual(messages[-1]["state"], "INTERNAL_ERROR")
+                self.assertEqual(messages[-1]["code"], "worker_unavailable")
+                self.assertIn("Check rootless Docker", messages[-1]["message"])
+                self.assertNotIn("Internal Docker setup detail", messages[-1]["message"])
+            docker.return_value.create.assert_not_called()
+
 
 async def send_json(socket, packet):
     await socket.send_input({"type": "websocket.receive", "text": json.dumps(packet)})
@@ -176,9 +195,15 @@ class InteractiveWorkerTests(SocketFixture, SimpleTestCase):
                 async with self.socket(info) as socket:
                     await self.accepted(socket)
                     messages = []
-                    for prompt, answer in (("first?", "one\n"), ("second?", "two\n")):
+                    for request_id, (prompt, answer) in enumerate(
+                        (("first?", "one\n"), ("second?", "two\n")), 1
+                    ):
                         await receive_until(socket, messages, lambda: prompt in stream(messages, "stdout"))
-                        await send_json(socket, {"type": "stdin", "data": answer})
+                        await send_json(socket, {"type": "stdin", "data": answer, "request_id": request_id})
+                        ack = {"type": "input_ack", "request_id": request_id}
+                        await receive_until(socket, messages, lambda: ack in messages)
+                        self.assertEqual(messages[-1], ack)
+                        self.assertNotIn("one:two", stream(messages, "stdout"))
                     result = await self.terminal(socket, messages, "COMPLETED")
                     self.assertEqual(result["exit_code"], 0)
                     self.assertEqual(stream(messages, "stdout"), "first?second?one:two\n")
@@ -205,9 +230,10 @@ class InteractiveWorkerTests(SocketFixture, SimpleTestCase):
             await self.accepted(socket)
             messages = []
             await receive_until(socket, messages, lambda: "ready?" in stream(messages, "stdout"))
-            await send_json(socket, {"type": "stdin", "data": "x" * (MAX_INPUT_CHUNK + 1)})
+            await send_json(socket, {"type": "stdin", "data": "x" * (MAX_INPUT_CHUNK + 1), "request_id": 4})
             await receive_until(socket, messages, lambda: any(m["type"] == "error" for m in messages))
-            self.assertIn("stdin_rejected", [m.get("code") for m in messages])
+            self.assertEqual(messages[-1]["code"], "stdin_rejected")
+            self.assertEqual(messages[-1]["request_id"], 4)
             await send_json(socket, {"type": "cancel"})
             await send_json(socket, {"type": "cancel"})
             await self.terminal(socket, messages, "CANCELLED")

@@ -23,6 +23,10 @@ class SandboxError(RuntimeError):
     """A Docker or isolation failure safe to report to an operator."""
 
 
+class SandboxUnavailable(SandboxError):
+    """The local worker could not start with its required isolation and image."""
+
+
 class Toolchain(StrEnum):
     C_CPP = "c-cpp"
     C_ANALYZER = "c-analyzer"
@@ -69,6 +73,7 @@ class SandboxOutcome:
     exit_code: int | None = None
     duration_ms: int = 0
     error: str | None = None
+    error_code: str | None = None
 
 
 def validate_engine_info(info):
@@ -87,7 +92,7 @@ def validate_engine_info(info):
 class DockerSandbox:
     def __init__(self, configuration: Path):
         if os.name != "posix":
-            raise SandboxError("Run the local Docker worker on Linux or WSL 2.")
+            raise SandboxUnavailable("Run the local Docker worker on Linux or WSL 2.")
         configuration.mkdir(mode=0o700)
         self._docker = (
             "docker",
@@ -113,16 +118,19 @@ class DockerSandbox:
             raise SandboxError("Docker control command could not be completed.") from error
 
     def verify(self):
-        result = self._call("info", "--format", "{{json .}}")
-        if result.returncode:
-            raise SandboxError("The local rootless Docker daemon could not be inspected.")
         try:
-            info = json.loads(result.stdout)
-            if not isinstance(info, dict):
-                raise ValueError("Expected a Docker info object.")
-        except ValueError as error:
-            raise SandboxError("Docker isolation capabilities could not be verified.") from error
-        validate_engine_info(info)
+            result = self._call("info", "--format", "{{json .}}")
+            if result.returncode:
+                raise SandboxError("The local rootless Docker daemon could not be inspected.")
+            try:
+                info = json.loads(result.stdout)
+                if not isinstance(info, dict):
+                    raise ValueError("Expected a Docker info object.")
+            except ValueError as error:
+                raise SandboxError("Docker isolation capabilities could not be verified.") from error
+            validate_engine_info(info)
+        except SandboxError as error:
+            raise SandboxUnavailable(str(error)) from error
 
     def create(self, name, workspace, toolchain, argv, limits, *, interactive=False):
         memory = f"{limits.memory_mib}m"
@@ -154,7 +162,7 @@ class DockerSandbox:
             *argv,
         )
         if result.returncode:
-            raise SandboxError("Docker could not create the worker. Check the local toolchain image.")
+            raise SandboxUnavailable("Docker could not create the worker. Check the local toolchain image.")
 
     def execute(self, name, limits, *, compiler_frame=False, interaction=None):
         started = monotonic()

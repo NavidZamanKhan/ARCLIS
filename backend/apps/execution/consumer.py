@@ -40,6 +40,7 @@ class ExecutionConsumer(AsyncWebsocketConsumer):
             return
 
         self.interaction = Interaction(session.stdin)
+        self.input_order = asyncio.Lock()
         try:
             await self.accept(subprotocol=SUBPROTOCOL)
         except BaseException:
@@ -50,6 +51,12 @@ class ExecutionConsumer(AsyncWebsocketConsumer):
     async def receive(self, text_data=None, bytes_data=None):
         if self.interaction is None or self.closed or self.finished:
             return
+        async with self.input_order:
+            if not self.closed and not self.finished:
+                await self._receive_message(text_data)
+
+    async def _receive_message(self, text_data):
+        request_id = None
         try:
             if (
                 text_data is None or len(text_data) > MAX_MESSAGE_BYTES
@@ -59,6 +66,13 @@ class ExecutionConsumer(AsyncWebsocketConsumer):
             message = json.loads(text_data)
             if not isinstance(message, dict):
                 raise ValueError
+            if "request_id" in message:
+                request_id = message.pop("request_id")
+                if (
+                    type(request_id) is not int or not 1 <= request_id <= 2**53 - 1
+                    or message.get("type") not in ("stdin", "eof")
+                ):
+                    raise ValueError
             if message == {"type": "cancel"}:
                 if self.interaction.stop():
                     await self._send_packet({"type": "status", "state": ExecutionState.CANCELLING})
@@ -70,8 +84,13 @@ class ExecutionConsumer(AsyncWebsocketConsumer):
                 self.interaction.send_input(message["data"].encode("utf-8"))
             else:
                 raise ValueError
+            if request_id is not None:
+                await self._send_packet({"type": "input_ack", "request_id": request_id})
         except InputRejected as error:
-            await self._send_packet({"type": "error", "code": "stdin_rejected", "message": str(error)})
+            reply = {"type": "error", "code": "stdin_rejected", "message": str(error)}
+            if request_id is not None:
+                reply["request_id"] = request_id
+            await self._send_packet(reply)
         except (ValueError, RecursionError):
             await self._send_packet(
                 {"type": "error", "code": "invalid_message", "message": "Invalid execution message."}
@@ -102,14 +121,16 @@ class ExecutionConsumer(AsyncWebsocketConsumer):
                 except Empty:
                     await asyncio.sleep(0.015)
                     continue
-                if kind == "status":
-                    await self._send_packet({"type": "status", "state": data})
-                else:
-                    text = decoders[kind].decode(data)
-                    if text:
-                        await self._send_packet({"type": kind, "data": text})
+                async with self.input_order:
+                    if kind == "status":
+                        await self._send_packet({"type": "status", "state": data})
+                    else:
+                        text = decoders[kind].decode(data)
+                        if text:
+                            await self._send_packet({"type": kind, "data": text})
             result = await asyncio.shield(worker)
-            self.finished = True
+            async with self.input_order:
+                self.finished = True
             if self.closed:
                 return
             for kind, decoder in decoders.items():
@@ -125,6 +146,11 @@ class ExecutionConsumer(AsyncWebsocketConsumer):
             }
             if packet["state"] == ExecutionState.INTERNAL_ERROR:
                 packet["message"] = "The local execution worker failed."
+                if outcome and outcome.error_code == "worker_unavailable":
+                    packet["code"] = outcome.error_code
+                    packet["message"] = (
+                        "The local execution worker is unavailable. Check rootless Docker and the toolchain image."
+                    )
             if await self._send_packet(packet):
                 await self.close()
         finally:

@@ -13,6 +13,7 @@ from .sandbox import (
     SandboxError,
     SandboxLimits,
     SandboxOutcome,
+    SandboxUnavailable,
     Toolchain,
     compiler_header,
 )
@@ -128,6 +129,8 @@ def _run_job(validated, toolchain, argv, limits, *, native_stdin=None, interacti
                         raise
             else:
                 outcome = SandboxOutcome(stopped)
+    except SandboxUnavailable as error:
+        outcome = SandboxOutcome(ExecutionState.INTERNAL_ERROR, error=str(error), error_code="worker_unavailable")
     except SandboxError as error:
         outcome = SandboxOutcome(ExecutionState.INTERNAL_ERROR, error=str(error))
     except OSError:
